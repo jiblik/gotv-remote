@@ -171,8 +171,18 @@ class MainActivity : AppCompatActivity(), AndroidTvRemote.Listener {
             true
         }
 
-        // Power row
-        mapButton(R.id.btnPower, "POWER")
+        // Power button - special: sends WOL when disconnected
+        findViewById<View>(R.id.btnPower).setOnClickListener {
+            hapticFeedback()
+            if (remote.isConnected) {
+                remote.sendCommand("POWER")
+            } else {
+                // Try Wake-on-LAN to turn on the streamer
+                remote.sendWakeOnLan()
+                Toast.makeText(this, "Sending wake-up signal...", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         mapButton(R.id.btnInput, "INPUT")
         mapButton(R.id.btnMute, "MUTE")
 

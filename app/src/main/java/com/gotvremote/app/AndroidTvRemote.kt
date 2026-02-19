@@ -229,6 +229,9 @@ class AndroidTvRemote(private val context: Context) {
                 isConnected = true
                 isPaired = true
 
+                // Discover and store MAC for Wake-on-LAN
+                discoverAndStoreMac(host)
+
                 // Start reading (server sends config first, then pings)
                 startReader()
 
@@ -306,6 +309,7 @@ class AndroidTvRemote(private val context: Context) {
                     isConnected = true
                     isPaired = true
 
+                    discoverAndStoreMac(host)
                     startReader()
 
                     withContext(Dispatchers.Main) { listener?.onConnected() }
@@ -556,9 +560,19 @@ class AndroidTvRemote(private val context: Context) {
         scope.launch {
             try {
                 // RemoteDirection: START_LONG=1, END_LONG=2, SHORT=3
-                // Use SHORT press (3) for single button press
-                val keyMsg = pbBytes(10, pbVarint(1, keyCode) + pbVarint(2, 3))
-                sendRemoteMessage(keyMsg)
+                // Volume/mute keys need START_LONG + END_LONG (press-release cycle)
+                // because Android's audio framework requires it for system volume
+                val isVolumeKey = keyCode == 24 || keyCode == 25 || keyCode == 164 // VOL_UP, VOL_DOWN, MUTE
+                if (isVolumeKey) {
+                    val down = pbBytes(10, pbVarint(1, keyCode) + pbVarint(2, 1)) // START_LONG
+                    sendRemoteMessage(down)
+                    delay(50)
+                    val up = pbBytes(10, pbVarint(1, keyCode) + pbVarint(2, 2))   // END_LONG
+                    sendRemoteMessage(up)
+                } else {
+                    val keyMsg = pbBytes(10, pbVarint(1, keyCode) + pbVarint(2, 3)) // SHORT
+                    sendRemoteMessage(keyMsg)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "sendKeyEvent failed", e)
                 withContext(Dispatchers.Main) { listener?.onError("Send failed") }
@@ -829,6 +843,101 @@ class AndroidTvRemote(private val context: Context) {
         } else {
             scope.launch(Dispatchers.Main) { listener?.onDisconnected() }
         }
+    }
+
+    // ===================== Wake-on-LAN =====================
+
+    /** Try to wake the streamer via Wake-on-LAN magic packet */
+    fun sendWakeOnLan() {
+        val host = serverHost.ifEmpty { prefs.getString("last_host", null) ?: return }
+        val macStr = prefs.getString("device_mac", null)
+
+        scope.launch {
+            try {
+                if (macStr != null) {
+                    // We have a stored MAC - send WOL magic packet
+                    sendMagicPacket(macStr, host)
+                    Log.d(TAG, "Sent WOL magic packet to $macStr")
+                    withContext(Dispatchers.Main) {
+                        listener?.onError("Sending wake-up signal...")
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        listener?.onError("Cannot wake - no MAC address stored. Connect once while the streamer is on.")
+                    }
+                }
+                // After sending WOL, try to reconnect
+                delay(3000)
+                if (!isConnected) {
+                    connect(host)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "WOL failed", e)
+            }
+        }
+    }
+
+    /** Discover and store MAC address from ARP table when connected */
+    private fun discoverAndStoreMac(host: String) {
+        try {
+            // Read ARP table to find MAC for the connected host
+            val proc = Runtime.getRuntime().exec("cat /proc/net/arp")
+            val reader = proc.inputStream.bufferedReader()
+            val lines = reader.readLines()
+            reader.close()
+            for (line in lines) {
+                if (line.contains(host)) {
+                    val parts = line.trim().split("\\s+".toRegex())
+                    if (parts.size >= 4) {
+                        val mac = parts[3].uppercase()
+                        if (mac.length == 17 && mac != "00:00:00:00:00:00") {
+                            prefs.edit().putString("device_mac", mac).apply()
+                            Log.d(TAG, "Stored MAC address: $mac for $host")
+                            return
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "MAC discovery failed: ${e.message}")
+        }
+    }
+
+    private fun sendMagicPacket(macStr: String, host: String) {
+        val macBytes = macStr.split(":").map { it.toInt(16).toByte() }.toByteArray()
+        if (macBytes.size != 6) return
+
+        // Magic packet: 6 bytes of 0xFF followed by MAC address repeated 16 times
+        val packet = ByteArray(6 + 16 * 6)
+        for (i in 0..5) packet[i] = 0xFF.toByte()
+        for (i in 0..15) System.arraycopy(macBytes, 0, packet, 6 + i * 6, 6)
+
+        // Send to broadcast address on port 9
+        val broadcastAddr = try {
+            // Derive broadcast from host IP (assume /24 subnet)
+            val parts = host.split(".")
+            if (parts.size == 4) {
+                java.net.InetAddress.getByName("${parts[0]}.${parts[1]}.${parts[2]}.255")
+            } else {
+                java.net.InetAddress.getByName("255.255.255.255")
+            }
+        } catch (e: Exception) {
+            java.net.InetAddress.getByName("255.255.255.255")
+        }
+
+        val dgPacket = java.net.DatagramPacket(packet, packet.size, broadcastAddr, 9)
+        val socket = java.net.DatagramSocket()
+        socket.broadcast = true
+        socket.send(dgPacket)
+        socket.close()
+
+        // Also send directly to the host IP
+        try {
+            val directPacket = java.net.DatagramPacket(packet, packet.size, java.net.InetAddress.getByName(host), 9)
+            val socket2 = java.net.DatagramSocket()
+            socket2.send(directPacket)
+            socket2.close()
+        } catch (_: Exception) {}
     }
 
     // ===================== Protobuf helpers =====================

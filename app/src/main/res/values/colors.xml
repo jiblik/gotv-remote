@@ -1,25 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="remote_bg">#1A1A2E</color>
-    <color name="remote_surface">#16213E</color>
-    <color name="remote_card">#0F3460</color>
-    <color name="accent_blue">#00A8E8</color>
-    <color name="accent_green">#00C853</color>
-    <color name="accent_red">#FF1744</color>
-    <color name="accent_yellow">#FFD600</color>
-    <color name="accent_orange">#FF6D00</color>
-    <color name="gotv_primary">#E94560</color>
-    <color name="gotv_primary_dark">#C81E45</color>
+    <!-- Base dark theme -->
+    <color name="bg_primary">#0D0D0D</color>
+    <color name="bg_secondary">#1A1A1A</color>
+    <color name="bg_card">#242424</color>
+    <color name="bg_elevated">#2E2E2E</color>
+
+    <!-- Accent colors -->
+    <color name="accent_primary">#6C63FF</color>
+    <color name="accent_primary_dim">#4A44B2</color>
+    <color name="accent_green">#34D399</color>
+    <color name="accent_red">#F87171</color>
+    <color name="accent_yellow">#FBBF24</color>
+    <color name="accent_blue">#60A5FA</color>
+    <color name="accent_orange">#FB923C</color>
+
+    <!-- Text -->
+    <color name="text_primary">#F5F5F5</color>
+    <color name="text_secondary">#9CA3AF</color>
+    <color name="text_dim">#6B7280</color>
     <color name="white">#FFFFFF</color>
-    <color name="light_gray">#B0BEC5</color>
-    <color name="dark_gray">#37474F</color>
-    <color name="btn_default">#2C3E6D</color>
-    <color name="btn_pressed">#1A2744</color>
-    <color name="dpad_bg">#1E3A5F</color>
-    <color name="dpad_center">#E94560</color>
-    <color name="power_red">#FF1744</color>
-    <color name="channel_btn">#3949AB</color>
-    <color name="volume_btn">#00897B</color>
-    <color name="number_btn">#263238</color>
-    <color name="media_btn">#4527A0</color>
+
+    <!-- Buttons -->
+    <color name="btn_surface">#2A2A2A</color>
+    <color name="btn_surface_light">#363636</color>
+    <color name="dpad_bg">#1E1E1E</color>
+    <color name="dpad_ring">#3A3A3A</color>
+    <color name="dpad_center_color">#6C63FF</color>
+    <color name="power_red">#EF4444</color>
+
+    <!-- Legacy compatibility -->
+    <color name="remote_bg">#0D0D0D</color>
+    <color name="gotv_primary">#6C63FF</color>
+    <color name="gotv_primary_dark">#4A44B2</color>
+    <color name="light_gray">#9CA3AF</color>
 </resources>

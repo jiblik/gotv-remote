@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.GOtvRemote" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/gotv_primary</item>
-        <item name="colorPrimaryVariant">@color/gotv_primary_dark</item>
+        <item name="colorPrimary">@color/accent_primary</item>
+        <item name="colorPrimaryVariant">@color/accent_primary_dim</item>
         <item name="colorOnPrimary">@color/white</item>
-        <item name="android:statusBarColor">@color/remote_bg</item>
-        <item name="android:navigationBarColor">@color/remote_bg</item>
-        <item name="android:windowBackground">@color/remote_bg</item>
+        <item name="android:statusBarColor">@color/bg_primary</item>
+        <item name="android:navigationBarColor">@color/bg_primary</item>
+        <item name="android:windowBackground">@color/bg_primary</item>
     </style>
 </resources>
