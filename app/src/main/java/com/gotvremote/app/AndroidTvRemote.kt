@@ -61,6 +61,15 @@ class AndroidTvRemote(private val context: Context) {
         const val PAIRING_PORT = 6467
         const val CONNECT_TIMEOUT_MS = 5000
 
+        // Feature flags for Android TV Remote Protocol v2
+        private const val FEATURE_PING = 1
+        private const val FEATURE_KEY = 2
+        private const val FEATURE_POWER = 32
+        private const val FEATURE_VOLUME = 64
+        private const val FEATURE_APP_LINK = 512
+        // Our requested features = PING | KEY | POWER | VOLUME | APP_LINK = 611
+        private const val ACTIVE_FEATURES = FEATURE_PING or FEATURE_KEY or FEATURE_POWER or FEATURE_VOLUME or FEATURE_APP_LINK
+
         // Android KeyEvent codes
         val KEY_MAP = mapOf(
             "POWER" to 26, "HOME" to 3, "BACK" to 4,
@@ -205,7 +214,7 @@ class AndroidTvRemote(private val context: Context) {
                 val sf = getSSLContext().socketFactory
                 val socket = sf.createSocket() as SSLSocket
                 socket.connect(InetSocketAddress(host, COMMAND_PORT), CONNECT_TIMEOUT_MS)
-                socket.soTimeout = 15000
+                socket.soTimeout = 30000  // Timeout for initial handshake
                 socket.startHandshake()
 
                 commandSocket = socket
@@ -441,10 +450,24 @@ class AndroidTvRemote(private val context: Context) {
     }
 
     // ===================== Command Protocol (RemoteMessage) =====================
-    // RemoteMessage fields: remote_configure=1, remote_set_active=2,
-    //   remote_ping_request=8, remote_ping_response=9, remote_key_inject=10
-    // RemoteKeyInject: key_code=1, direction=2
+    // RemoteMessage fields:
+    //   remote_configure=1, remote_set_active=2, remote_error=3,
+    //   remote_ping_request=7, remote_ping_response=8,
+    //   remote_key_inject=10, remote_ime_key_inject=11,
+    //   remote_ime_show_request=13, remote_voice_begin=14, remote_voice_payload=15,
+    //   remote_voice_end=16, remote_start=17, remote_set_volume_level=18,
+    //   remote_adjust_volume_level=19, remote_set_preferred_audio_device=20,
+    //   remote_ime_batch_edit=21, remote_ime_show_request2=22,
+    //   remote_device_info=23, remote_reset_preferred_audio_device=24
+    //
+    // RemoteConfigure: code1=1, device_info=2
+    // RemoteDeviceInfo: model=1, vendor=2, unknown1=3, unknown2=4, package_name=5, app_version=6
+    // RemoteSetActive: active=1
+    // RemotePingRequest: val1=1
     // RemotePingResponse: val1=1
+    // RemoteKeyInject: key_code=1, direction=2
+    // RemoteSetVolumeLevel: volume_max=1, volume_level=2, muted=3
+    // RemoteStart: started=1
 
     fun sendCommand(buttonName: String): Boolean {
         val keyCode = KEY_MAP[buttonName] ?: return false
@@ -456,13 +479,12 @@ class AndroidTvRemote(private val context: Context) {
         if (!isConnected) return
         scope.launch {
             try {
-                // SHORT press: direction=3 in the proto means SHORT
-                // But we send DOWN(1) then UP(2) for compatibility
+                // Send DOWN(1) then UP(2) for key press
                 val down = pbBytes(10, pbVarint(1, keyCode) + pbVarint(2, 1))
-                sendCommand(down)
+                sendRemoteMessage(down)
                 delay(50)
                 val up = pbBytes(10, pbVarint(1, keyCode) + pbVarint(2, 2))
-                sendCommand(up)
+                sendRemoteMessage(up)
             } catch (e: Exception) {
                 Log.e(TAG, "sendKeyEvent failed", e)
                 withContext(Dispatchers.Main) { listener?.onError("Send failed") }
@@ -470,7 +492,7 @@ class AndroidTvRemote(private val context: Context) {
         }
     }
 
-    private fun sendCommand(data: ByteArray) {
+    private fun sendRemoteMessage(data: ByteArray) {
         val out = commandOut ?: return
         try {
             synchronized(out) {
@@ -490,20 +512,36 @@ class AndroidTvRemote(private val context: Context) {
             try {
                 val input = commandIn ?: return@launch
 
-                // First: read server's initial config message
+                // Step 1: Read server's remote_configure message
                 val firstMsg = readCommandMessage(input)
-                Log.d(TAG, "Server config: ${firstMsg?.size} bytes")
+                if (firstMsg == null) {
+                    Log.e(TAG, "No server config received")
+                    handleDisconnect()
+                    return@launch
+                }
+                Log.d(TAG, "Server config: ${firstMsg.size} bytes: ${firstMsg.joinToString(",") { (it.toInt() and 0xFF).toString() }}")
 
-                // Send our config response
-                // remote_configure (field 1): code1=622, device_info(field 4) with package etc
-                val devInfo = pbVarint(1, 1) + pbString(2, "1") + pbString(3, "atvremote") + pbString(4, "1.0.0")
-                val configResp = pbBytes(1, pbVarint(1, 622) + pbBytes(4, devInfo))
-                sendCommand(configResp)
+                // Parse server's supported features from remote_configure.code1 (field 1, sub-field 1)
+                val configPayload = extractFieldBytes(firstMsg, 1)
+                val serverFeatures = if (configPayload != null) extractVarintField(configPayload, 1) else ACTIVE_FEATURES
+                Log.d(TAG, "Server features: $serverFeatures")
 
-                // Send set_active (field 2): code1=622
-                sendCommand(pbBytes(2, pbVarint(1, 622)))
+                // Compute negotiated features = ours AND server's
+                val negotiatedFeatures = ACTIVE_FEATURES and serverFeatures
+                Log.d(TAG, "Negotiated features: $negotiatedFeatures")
 
-                // Read loop for pings and other messages
+                // Step 2: Send our remote_configure response
+                // RemoteConfigure (field 1): code1 (field 1) = negotiated features, device_info (field 2)
+                // RemoteDeviceInfo: unknown1 (field 3) = 1, unknown2 (field 4) = "1",
+                //   package_name (field 5) = "atvremote", app_version (field 6) = "1.0.0"
+                val devInfo = pbVarint(3, 1) + pbString(4, "1") + pbString(5, "atvremote") + pbString(6, "1.0.0")
+                val configResp = pbBytes(1, pbVarint(1, negotiatedFeatures) + pbBytes(2, devInfo))
+                sendRemoteMessage(configResp)
+                Log.d(TAG, "Sent config response with features=$negotiatedFeatures")
+
+                // Step 3: Read and handle messages (set_active, start, pings)
+                // The server will send: remote_set_active, then remote_start, then pings
+                commandSocket?.soTimeout = 0  // Remove read timeout for long-lived connection
                 while (isActive && isConnected) {
                     val msg = readCommandMessage(input)
                     if (msg == null) {
@@ -531,46 +569,131 @@ class AndroidTvRemote(private val context: Context) {
                 read += n
             }
             data
-        } catch (e: Exception) { null }
+        } catch (e: Exception) {
+            Log.w(TAG, "readCommandMessage error: ${e.message}")
+            null
+        }
     }
 
     private fun handleRemoteMessage(data: ByteArray) {
         if (data.isEmpty()) return
-        // Check field tag: field 8 = ping request (tag = 8<<3|2 = 66)
-        if (data[0] == 66.toByte()) {
-            // Respond with pong (field 9 = remote_ping_response)
-            // Echo the val1 from the ping
-            try {
-                // Extract val1 from ping request
-                val inner = extractFieldBytes(data, 8)
-                val val1 = if (inner != null) extractVarintField(inner, 1) else 0
-                val pong = pbBytes(9, pbVarint(1, val1))
-                sendCommand(pong)
-            } catch (_: Exception) {
-                // Fallback: send generic pong
-                sendCommand(pbBytes(9, pbVarint(1, 0)))
+
+        // Parse the top-level field number from the first tag
+        val parsed = parseTag(data, 0)
+        if (parsed == null) return
+        val fieldNum = parsed.first
+        val wireType = parsed.second
+
+        Log.d(TAG, "Received message: field=$fieldNum wireType=$wireType size=${data.size}")
+
+        when (fieldNum) {
+            1 -> {
+                // remote_configure - server config (already handled in startReader, but may come again)
+                Log.d(TAG, "Got remote_configure")
+            }
+            2 -> {
+                // remote_set_active - respond with our active features
+                Log.d(TAG, "Got remote_set_active, responding")
+                val resp = pbBytes(2, pbVarint(1, ACTIVE_FEATURES))
+                sendRemoteMessage(resp)
+            }
+            3 -> {
+                // remote_error
+                Log.e(TAG, "Server sent remote_error")
+            }
+            7 -> {
+                // remote_ping_request - respond with pong (field 8)
+                try {
+                    val inner = extractFieldBytes(data, 7)
+                    val val1 = if (inner != null) extractVarintField(inner, 1) else 0
+                    Log.d(TAG, "Ping request val1=$val1, sending pong")
+                    val pong = pbBytes(8, pbVarint(1, val1))
+                    sendRemoteMessage(pong)
+                } catch (_: Exception) {
+                    sendRemoteMessage(pbBytes(8, pbVarint(1, 0)))
+                }
+            }
+            8 -> {
+                // remote_ping_response (shouldn't come, but ignore)
+                Log.d(TAG, "Got ping response (ignoring)")
+            }
+            17 -> {
+                // remote_start - connection is fully established
+                val inner = extractFieldBytes(data, 17)
+                val started = if (inner != null) extractVarintField(inner, 1) else 0
+                Log.d(TAG, "Got remote_start: started=$started")
+            }
+            18 -> {
+                // remote_set_volume_level
+                try {
+                    val inner = extractFieldBytes(data, 18)
+                    if (inner != null) {
+                        val max = extractVarintField(inner, 1)
+                        val level = extractVarintField(inner, 2)
+                        Log.d(TAG, "Volume: $level / $max")
+                        scope.launch(Dispatchers.Main) { listener?.onVolumeChanged(level, max) }
+                    }
+                } catch (_: Exception) {}
+            }
+            else -> {
+                Log.d(TAG, "Unhandled message field=$fieldNum, ${data.size} bytes")
             }
         }
+    }
+
+    /** Parse a protobuf tag at the given position. Returns (fieldNumber, wireType) and advances. */
+    private fun parseTag(data: ByteArray, startPos: Int): Pair<Int, Int>? {
+        if (startPos >= data.size) return null
+        var pos = startPos
+        var tag = 0
+        var shift = 0
+        while (pos < data.size) {
+            val b = data[pos].toInt() and 0xFF
+            pos++
+            tag = tag or ((b and 0x7F) shl shift)
+            if (b and 0x80 == 0) break
+            shift += 7
+            if (shift >= 35) return null
+        }
+        return Pair(tag ushr 3, tag and 0x07)
     }
 
     private fun extractFieldBytes(data: ByteArray, fieldNum: Int): ByteArray? {
         var pos = 0
         while (pos < data.size) {
-            val tag = data[pos].toInt() and 0xFF
+            // Read tag as varint
+            var tag = 0; var shift = 0
+            while (pos < data.size) {
+                val b = data[pos].toInt() and 0xFF; pos++
+                tag = tag or ((b and 0x7F) shl shift)
+                if (b and 0x80 == 0) break
+                shift += 7
+            }
             val fNum = tag ushr 3
             val wireType = tag and 0x07
-            pos++
-            if (wireType == 2) { // length-delimited
-                if (pos >= data.size) return null
-                val len = data[pos].toInt() and 0xFF
-                pos++
-                if (fNum == fieldNum) {
-                    return data.copyOfRange(pos, minOf(pos + len, data.size))
+
+            when (wireType) {
+                2 -> { // length-delimited
+                    // Read length as varint
+                    var len = 0; shift = 0
+                    while (pos < data.size) {
+                        val b = data[pos].toInt() and 0xFF; pos++
+                        len = len or ((b and 0x7F) shl shift)
+                        if (b and 0x80 == 0) break
+                        shift += 7
+                    }
+                    if (fNum == fieldNum) {
+                        return data.copyOfRange(pos, minOf(pos + len, data.size))
+                    }
+                    pos += len
                 }
-                pos += len
-            } else if (wireType == 0) { // varint
-                while (pos < data.size && data[pos].toInt() and 0x80 != 0) pos++
-                pos++
+                0 -> { // varint
+                    while (pos < data.size && data[pos].toInt() and 0x80 != 0) pos++
+                    pos++ // skip last byte of varint
+                }
+                1 -> pos += 8 // 64-bit
+                5 -> pos += 4 // 32-bit
+                else -> return null // unknown wire type
             }
         }
         return null
@@ -579,22 +702,41 @@ class AndroidTvRemote(private val context: Context) {
     private fun extractVarintField(data: ByteArray, fieldNum: Int): Int {
         var pos = 0
         while (pos < data.size) {
-            val tag = data[pos].toInt() and 0xFF
+            // Read tag as varint
+            var tag = 0; var shift = 0
+            while (pos < data.size) {
+                val b = data[pos].toInt() and 0xFF; pos++
+                tag = tag or ((b and 0x7F) shl shift)
+                if (b and 0x80 == 0) break
+                shift += 7
+            }
             val fNum = tag ushr 3
             val wireType = tag and 0x07
-            pos++
-            if (wireType == 0) {
-                var result = 0; var shift = 0
-                while (pos < data.size) {
-                    val b = data[pos].toInt() and 0xFF; pos++
-                    result = result or ((b and 0x7F) shl shift)
-                    if (b and 0x80 == 0) break
-                    shift += 7
+
+            when (wireType) {
+                0 -> { // varint
+                    var result = 0; shift = 0
+                    while (pos < data.size) {
+                        val b = data[pos].toInt() and 0xFF; pos++
+                        result = result or ((b and 0x7F) shl shift)
+                        if (b and 0x80 == 0) break
+                        shift += 7
+                    }
+                    if (fNum == fieldNum) return result
                 }
-                if (fNum == fieldNum) return result
-            } else if (wireType == 2) {
-                if (pos >= data.size) return 0
-                val len = data[pos].toInt() and 0xFF; pos++; pos += len
+                2 -> { // length-delimited
+                    var len = 0; shift = 0
+                    while (pos < data.size) {
+                        val b = data[pos].toInt() and 0xFF; pos++
+                        len = len or ((b and 0x7F) shl shift)
+                        if (b and 0x80 == 0) break
+                        shift += 7
+                    }
+                    pos += len
+                }
+                1 -> pos += 8 // 64-bit
+                5 -> pos += 4 // 32-bit
+                else -> return 0
             }
         }
         return 0
