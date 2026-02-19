@@ -1,16 +1,26 @@
 # GOtv Remote Control
 
-Android IR remote control app for GOtv / StarTimes set-top box decoders.
-Optimized for **ASUS Zenfone 10** (built-in IR blaster).
+WiFi remote control app for GOtv Android TV Streamer.
+Works on **any Android phone** - no IR blaster needed!
 
 ## Features
 
-- Full GOtv decoder remote control via IR blaster
+- Controls GOtv streamer over **WiFi** using Android TV Remote Protocol v2
+- Same protocol used by the official Google TV app
+- TLS encrypted connection (secure)
+- Auto-reconnect to last paired device
 - All standard buttons: Power, Volume, Channel, D-Pad, Numbers, Media controls
-- NEC protocol (38kHz) - compatible with GOtv/StarTimes decoders
-- Dark theme optimized for ASUS Zenfone 10 (5.9" AMOLED, 1080x2400)
-- Haptic feedback on button press
-- No internet connection required (pure IR)
+- Dark theme, haptic feedback
+- Works on any Android 8.0+ phone (optimized for ASUS Zenfone 10)
+
+## How to Use
+
+1. Connect your phone and GOtv streamer to the **same WiFi network**
+2. Open the app
+3. Enter the **IP address** of your GOtv (find it in: GOtv Settings > Network > IP)
+4. A **pairing code** will appear on your TV screen
+5. Enter the code in the app
+6. Done! The remote works automatically from now on
 
 ## Buttons
 
@@ -25,35 +35,32 @@ Optimized for **ASUS Zenfone 10** (built-in IR blaster).
 | Extra | EPG, FAV, SUB, Audio |
 | Media | Play/Pause, Stop, Record, Rewind, Fast Forward |
 
-## Requirements
-
-- Android phone with **IR blaster** (like ASUS Zenfone 10)
-- Android 8.0+ (API 26)
-- Point phone's IR emitter at GOtv decoder (within ~3m)
-
-## Build
+## Download & Install
 
 ### From GitHub Actions
 1. Go to **Actions** tab
-2. Click latest build
-3. Download **gotv-remote-debug** APK artifact
-4. Install on your phone (enable "Install from unknown sources")
+2. Click the latest green build
+3. Download **gotv-remote-debug** from Artifacts
+4. Transfer APK to your phone
+5. Install (enable "Install from unknown sources" in Settings)
 
 ### From Android Studio
 1. Clone this repo
 2. Open in Android Studio
-3. Build > Build Bundle(s) / APK(s) > Build APK(s)
-4. Install the APK on your phone
+3. Build > Build APK
+4. Install on your phone
 
-## IR Protocol
+## Protocol
 
-- Protocol: **NEC**
-- Carrier: **38kHz**
-- Device Address: **0x04**
-- Compatible with: GOtv, StarTimes, and similar decoders
+- **Android TV Remote Protocol v2** (same as Google TV app)
+- Ports: **6466** (commands) / **6467** (pairing)
+- Encryption: **TLS 1.2**
+- No ADB or developer mode needed on the GOtv
 
 ## Troubleshooting
 
-- **No IR Blaster detected**: Your phone doesn't have an IR emitter. This app requires a phone with built-in IR (ASUS Zenfone 10, Xiaomi, Huawei, etc.)
-- **Buttons not working**: Point the top of your phone directly at the GOtv decoder. Keep within 3 meters. Remove any obstructions.
-- **Wrong channels/functions**: The IR codes may need adjustment for your specific decoder model. Check Settings for protocol info.
+- **Can't connect**: Make sure both devices are on the same WiFi network
+- **No pairing code on TV**: Try restarting the GOtv streamer, then reconnect
+- **Connection drops**: Check WiFi stability. The app auto-reconnects on reopen
+- **Wrong IP**: Long-press the settings icon to change the IP address
+- **Reset pairing**: Go to Settings > "Forget Pairing & Reconnect"

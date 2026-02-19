@@ -19,7 +19,7 @@
             android:textStyle="bold"
             android:layout_marginBottom="24dp" />
 
-        <!-- IR Status -->
+        <!-- Connection Status -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -31,7 +31,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="IR Blaster Status"
+                android:text="WiFi Connection"
                 android:textColor="@color/white"
                 android:textSize="16sp"
                 android:textStyle="bold"
@@ -71,13 +71,13 @@
                 android:textSize="14sp" />
         </LinearLayout>
 
-        <!-- IR Test -->
+        <!-- Reset Pairing -->
         <Button
             android:id="@+id/btnTestIr"
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:background="@drawable/btn_gotv_accent"
-            android:text="Test IR Blaster"
+            android:text="Forget Pairing"
             android:textColor="@color/white"
             android:textSize="16sp"
             android:layout_marginBottom="16dp" />
@@ -94,7 +94,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="IR Protocol"
+                android:text="Protocol"
                 android:textColor="@color/white"
                 android:textSize="16sp"
                 android:textStyle="bold"
@@ -103,7 +103,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Protocol: NEC\nCarrier: 38kHz\nTarget: GOtv / StarTimes Decoder\nDevice Address: 0x04"
+                android:text="Android TV Remote Protocol v2\nPorts: 6466 (commands) / 6467 (pairing)\nEncryption: TLS 1.2\nTarget: GOtv Android TV Streamer"
                 android:textColor="@color/light_gray"
                 android:textSize="14sp"
                 android:lineSpacingExtra="4dp" />
@@ -129,7 +129,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="1. Point the top of your phone at the GOtv decoder\n2. Keep distance under 3 meters\n3. Press any button on the remote\n4. Make sure nothing blocks the IR emitter\n\nNote: ASUS Zenfone 10 has a built-in IR blaster at the top of the device."
+                android:text="1. Make sure your phone and GOtv streamer are on the same WiFi network\n2. Open the app - it will ask for the GOtv IP address\n3. Find the IP in: GOtv Settings > Network > IP address\n4. On first connection, a pairing code will appear on the TV\n5. Enter the code in the app to pair\n6. After pairing, the remote works automatically!\n\nLong-press the settings icon to change the IP address."
                 android:textColor="@color/light_gray"
                 android:textSize="14sp"
                 android:lineSpacingExtra="4dp" />

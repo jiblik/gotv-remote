@@ -1,42 +1,146 @@
 package com.gotvremote.app
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.view.View
-import android.widget.Button
-import android.widget.ImageButton
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), AndroidTvRemote.Listener {
 
-    private lateinit var irController: IrController
+    private lateinit var remote: AndroidTvRemote
+    private lateinit var tvStatus: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        irController = IrController(this)
-        updateConnectionStatus()
-        setupButtons()
-    }
+        remote = AndroidTvRemote(this)
+        remote.listener = this
 
-    private fun updateConnectionStatus() {
-        val tvStatus = findViewById<TextView>(R.id.tvConnectionStatus)
-        if (irController.hasIrBlaster) {
-            tvStatus.text = "IR Ready"
-            tvStatus.setTextColor(getColor(R.color.accent_green))
+        tvStatus = findViewById(R.id.tvConnectionStatus)
+        updateStatus("Disconnected", R.color.accent_red)
+
+        setupButtons()
+
+        // Auto-connect to last known host
+        val lastHost = remote.getLastHost()
+        if (lastHost != null) {
+            updateStatus("Connecting...", R.color.accent_yellow)
+            remote.connect(lastHost)
         } else {
-            tvStatus.text = "No IR Blaster"
-            tvStatus.setTextColor(getColor(R.color.accent_red))
+            showConnectDialog()
         }
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        remote.destroy()
+    }
+
+    // ===================== Connection UI =====================
+
+    private fun showConnectDialog() {
+        val input = EditText(this).apply {
+            hint = "e.g. 192.168.1.100"
+            setText(remote.getLastHost() ?: "")
+            setPadding(48, 32, 48, 32)
+            setTextColor(resources.getColor(R.color.white, theme))
+            setHintTextColor(resources.getColor(R.color.light_gray, theme))
+        }
+
+        AlertDialog.Builder(this, com.google.android.material.R.style.ThemeOverlay_MaterialComponents_Dialog)
+            .setTitle("Connect to GOtv")
+            .setMessage("Enter the IP address of your GOtv streamer.\n\nYou can find it in: Settings > Network > IP address")
+            .setView(input)
+            .setPositiveButton("Connect") { _, _ ->
+                val host = input.text.toString().trim()
+                if (host.isNotEmpty()) {
+                    updateStatus("Connecting...", R.color.accent_yellow)
+                    remote.connect(host)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .setCancelable(false)
+            .show()
+    }
+
+    private fun showPairingDialog(message: String?) {
+        val input = EditText(this).apply {
+            hint = "Enter code from TV"
+            setPadding(48, 32, 48, 32)
+            setTextColor(resources.getColor(R.color.white, theme))
+            setHintTextColor(resources.getColor(R.color.light_gray, theme))
+            textSize = 24f
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+        }
+
+        AlertDialog.Builder(this, com.google.android.material.R.style.ThemeOverlay_MaterialComponents_Dialog)
+            .setTitle("Pair with GOtv")
+            .setMessage(message ?: "Enter the pairing code shown on your TV screen")
+            .setView(input)
+            .setPositiveButton("Pair") { _, _ ->
+                val code = input.text.toString().trim()
+                if (code.isNotEmpty()) {
+                    updateStatus("Pairing...", R.color.accent_yellow)
+                    remote.submitPairingCode(code)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun updateStatus(text: String, colorRes: Int) {
+        tvStatus.text = text
+        tvStatus.setTextColor(getColor(colorRes))
+    }
+
+    // ===================== AndroidTvRemote.Listener =====================
+
+    override fun onConnected() {
+        updateStatus("Connected", R.color.accent_green)
+        Toast.makeText(this, "Connected to GOtv!", Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onDisconnected() {
+        updateStatus("Disconnected", R.color.accent_red)
+    }
+
+    override fun onPairingRequired(pairingCode: String?) {
+        updateStatus("Pairing needed", R.color.accent_yellow)
+        showPairingDialog(pairingCode)
+    }
+
+    override fun onPairingComplete() {
+        Toast.makeText(this, "Pairing successful!", Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onError(message: String) {
+        updateStatus("Error", R.color.accent_red)
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+
+    override fun onVolumeChanged(volume: Int, max: Int) {
+        // Could update a volume indicator in the UI
+    }
+
+    // ===================== Button Setup =====================
 
     private fun setupButtons() {
         // Settings
         findViewById<ImageButton>(R.id.btnSettings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
+        }
+
+        // Long press settings = reconnect
+        findViewById<ImageButton>(R.id.btnSettings).setOnLongClickListener {
+            showConnectDialog()
+            true
         }
 
         // Power row
@@ -93,10 +197,30 @@ class MainActivity : AppCompatActivity() {
 
     private fun mapButton(viewId: Int, command: String) {
         findViewById<View>(viewId).setOnClickListener {
-            val sent = irController.sendCommand(command)
-            if (!sent && !irController.hasIrBlaster) {
-                Toast.makeText(this, "No IR blaster detected on this device", Toast.LENGTH_SHORT).show()
+            hapticFeedback()
+            if (remote.isConnected) {
+                remote.sendCommand(command)
+            } else {
+                Toast.makeText(this, "Not connected. Tap settings to connect.", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    private fun hapticFeedback() {
+        try {
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vm = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                vm.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                getSystemService(VIBRATOR_SERVICE) as Vibrator
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(25, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(25)
+            }
+        } catch (_: Exception) {}
     }
 }
