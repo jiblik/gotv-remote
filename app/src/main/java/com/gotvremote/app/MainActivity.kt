@@ -50,13 +50,14 @@ class MainActivity : AppCompatActivity(), AndroidTvRemote.Listener {
             hint = "e.g. 192.168.1.100"
             setText(remote.getLastHost() ?: "")
             setPadding(48, 32, 48, 32)
-            setTextColor(resources.getColor(R.color.white, theme))
-            setHintTextColor(resources.getColor(R.color.light_gray, theme))
+            setTextColor(0xFF000000.toInt())
+            setHintTextColor(0xFF888888.toInt())
+            setBackgroundColor(0xFFEEEEEE.toInt())
         }
 
-        AlertDialog.Builder(this, com.google.android.material.R.style.ThemeOverlay_MaterialComponents_Dialog)
+        AlertDialog.Builder(this)
             .setTitle("Connect to GOtv")
-            .setMessage("Enter the IP address of your GOtv streamer.\n\nYou can find it in: Settings > Network > IP address")
+            .setMessage("Enter the IP address of your GOtv streamer.\n\nFind it in: GOtv Settings > Network > IP address")
             .setView(input)
             .setPositiveButton("Connect") { _, _ ->
                 val host = input.text.toString().trim()
@@ -72,17 +73,19 @@ class MainActivity : AppCompatActivity(), AndroidTvRemote.Listener {
 
     private fun showPairingDialog(message: String?) {
         val input = EditText(this).apply {
-            hint = "Enter code from TV"
+            hint = "e.g. A1B2C3"
             setPadding(48, 32, 48, 32)
-            setTextColor(resources.getColor(R.color.white, theme))
-            setHintTextColor(resources.getColor(R.color.light_gray, theme))
+            setTextColor(0xFF000000.toInt())
+            setHintTextColor(0xFF888888.toInt())
+            setBackgroundColor(0xFFEEEEEE.toInt())
             textSize = 24f
             textAlignment = View.TEXT_ALIGNMENT_CENTER
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
         }
 
-        AlertDialog.Builder(this, com.google.android.material.R.style.ThemeOverlay_MaterialComponents_Dialog)
+        AlertDialog.Builder(this)
             .setTitle("Pair with GOtv")
-            .setMessage(message ?: "Enter the pairing code shown on your TV screen")
+            .setMessage(message ?: "Enter the 6-character code shown on your TV screen")
             .setView(input)
             .setPositiveButton("Pair") { _, _ ->
                 val code = input.text.toString().trim()

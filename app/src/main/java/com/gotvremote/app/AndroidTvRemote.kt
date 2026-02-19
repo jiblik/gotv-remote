@@ -2,20 +2,23 @@ package com.gotvremote.app
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import kotlinx.coroutines.*
 import java.io.*
 import java.math.BigInteger
 import java.net.InetSocketAddress
 import java.security.*
 import java.security.cert.X509Certificate
+import java.security.interfaces.RSAPublicKey
 import javax.net.ssl.*
 
 /**
  * Android TV Remote Protocol v2 implementation.
  * Controls Android TV / GOtv streamer over WiFi.
  *
- * Protocol: TLS connection on port 6466 (commands) and 6467 (pairing)
- * Based on the protocol used by the Google TV mobile app.
+ * Protocol based on: https://github.com/tronikos/androidtvremote2
+ * Pairing: port 6467, Commands: port 6466
+ * Uses protobuf-like manual encoding (no protobuf dependency needed).
  */
 class AndroidTvRemote(private val context: Context) {
 
@@ -46,114 +49,38 @@ class AndroidTvRemote(private val context: Context) {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var readerJob: Job? = null
-    private var pingJob: Job? = null
 
-    @Volatile
-    var isConnected = false
-        private set
-
-    @Volatile
-    var isPaired = false
-        private set
+    @Volatile var isConnected = false; private set
+    @Volatile var isPaired = false; private set
 
     private var serverHost: String = ""
 
     companion object {
+        private const val TAG = "AtvRemote"
         const val COMMAND_PORT = 6466
         const val PAIRING_PORT = 6467
         const val CONNECT_TIMEOUT_MS = 5000
 
         // Android KeyEvent codes
-        const val KEYCODE_POWER = 26
-        const val KEYCODE_HOME = 3
-        const val KEYCODE_BACK = 4
-        const val KEYCODE_DPAD_UP = 19
-        const val KEYCODE_DPAD_DOWN = 20
-        const val KEYCODE_DPAD_LEFT = 21
-        const val KEYCODE_DPAD_RIGHT = 22
-        const val KEYCODE_DPAD_CENTER = 23
-        const val KEYCODE_VOLUME_UP = 24
-        const val KEYCODE_VOLUME_DOWN = 25
-        const val KEYCODE_VOLUME_MUTE = 164
-        const val KEYCODE_CHANNEL_UP = 166
-        const val KEYCODE_CHANNEL_DOWN = 167
-        const val KEYCODE_0 = 7
-        const val KEYCODE_1 = 8
-        const val KEYCODE_2 = 9
-        const val KEYCODE_3 = 10
-        const val KEYCODE_4 = 11
-        const val KEYCODE_5 = 12
-        const val KEYCODE_6 = 13
-        const val KEYCODE_7 = 14
-        const val KEYCODE_8 = 15
-        const val KEYCODE_9 = 16
-        const val KEYCODE_ENTER = 66
-        const val KEYCODE_MENU = 82
-        const val KEYCODE_GUIDE = 172
-        const val KEYCODE_INFO = 165
-        const val KEYCODE_MEDIA_PLAY_PAUSE = 85
-        const val KEYCODE_MEDIA_STOP = 86
-        const val KEYCODE_MEDIA_NEXT = 87
-        const val KEYCODE_MEDIA_PREVIOUS = 88
-        const val KEYCODE_MEDIA_REWIND = 89
-        const val KEYCODE_MEDIA_FAST_FORWARD = 90
-        const val KEYCODE_MEDIA_RECORD = 130
-        const val KEYCODE_TV_INPUT = 178
-        const val KEYCODE_BOOKMARK = 174 // FAV
-        const val KEYCODE_LAST_CHANNEL = 229
-        const val KEYCODE_CAPTIONS = 175 // SUB
-        const val KEYCODE_MEDIA_AUDIO_TRACK = 222
-        const val KEYCODE_TV = 170
-        const val KEYCODE_SETTINGS = 176
-
-        // Button name to KeyCode mapping
         val KEY_MAP = mapOf(
-            "POWER" to KEYCODE_POWER,
-            "HOME" to KEYCODE_HOME,
-            "BACK" to KEYCODE_BACK,
-            "UP" to KEYCODE_DPAD_UP,
-            "DOWN" to KEYCODE_DPAD_DOWN,
-            "LEFT" to KEYCODE_DPAD_LEFT,
-            "RIGHT" to KEYCODE_DPAD_RIGHT,
-            "OK" to KEYCODE_DPAD_CENTER,
-            "VOL_UP" to KEYCODE_VOLUME_UP,
-            "VOL_DOWN" to KEYCODE_VOLUME_DOWN,
-            "MUTE" to KEYCODE_VOLUME_MUTE,
-            "CH_UP" to KEYCODE_CHANNEL_UP,
-            "CH_DOWN" to KEYCODE_CHANNEL_DOWN,
-            "0" to KEYCODE_0,
-            "1" to KEYCODE_1,
-            "2" to KEYCODE_2,
-            "3" to KEYCODE_3,
-            "4" to KEYCODE_4,
-            "5" to KEYCODE_5,
-            "6" to KEYCODE_6,
-            "7" to KEYCODE_7,
-            "8" to KEYCODE_8,
-            "9" to KEYCODE_9,
-            "MENU" to KEYCODE_MENU,
-            "GUIDE" to KEYCODE_GUIDE,
-            "INFO" to KEYCODE_INFO,
-            "INPUT" to KEYCODE_TV_INPUT,
-            "PLAY_PAUSE" to KEYCODE_MEDIA_PLAY_PAUSE,
-            "STOP" to KEYCODE_MEDIA_STOP,
-            "REWIND" to KEYCODE_MEDIA_REWIND,
-            "FAST_FORWARD" to KEYCODE_MEDIA_FAST_FORWARD,
-            "RECORD" to KEYCODE_MEDIA_RECORD,
-            "FAV" to KEYCODE_BOOKMARK,
-            "LAST" to KEYCODE_LAST_CHANNEL,
-            "SUBTITLE" to KEYCODE_CAPTIONS,
-            "AUDIO" to KEYCODE_MEDIA_AUDIO_TRACK,
-            "EPG" to KEYCODE_GUIDE,
-            "ENTER" to KEYCODE_ENTER
+            "POWER" to 26, "HOME" to 3, "BACK" to 4,
+            "UP" to 19, "DOWN" to 20, "LEFT" to 21, "RIGHT" to 22, "OK" to 23,
+            "VOL_UP" to 24, "VOL_DOWN" to 25, "MUTE" to 164,
+            "CH_UP" to 166, "CH_DOWN" to 167,
+            "0" to 7, "1" to 8, "2" to 9, "3" to 10, "4" to 11,
+            "5" to 12, "6" to 13, "7" to 14, "8" to 15, "9" to 16,
+            "MENU" to 82, "GUIDE" to 172, "INFO" to 165, "INPUT" to 178,
+            "PLAY_PAUSE" to 85, "STOP" to 86, "REWIND" to 89,
+            "FAST_FORWARD" to 90, "RECORD" to 130,
+            "FAV" to 174, "LAST" to 229, "SUBTITLE" to 175,
+            "AUDIO" to 222, "EPG" to 172, "ENTER" to 66
         )
     }
 
-    // ===================== SSL / Certificate Management =====================
+    // ===================== SSL / Certificate =====================
 
     private fun getOrCreateKeyStore(): KeyStore {
         keyStore?.let { return it }
-
         val ks = KeyStore.getInstance(KeyStore.getDefaultType())
         val certFile = File(context.filesDir, "atv_keystore.bks")
 
@@ -162,182 +89,107 @@ class AndroidTvRemote(private val context: Context) {
                 certFile.inputStream().use { ks.load(it, "gotvremote".toCharArray()) }
                 keyStore = ks
                 return ks
-            } catch (e: Exception) {
-                certFile.delete()
-            }
+            } catch (e: Exception) { certFile.delete() }
         }
 
-        // Generate new self-signed certificate
         ks.load(null, null)
         val kpg = KeyPairGenerator.getInstance("RSA")
         kpg.initialize(2048)
         val keyPair = kpg.generateKeyPair()
-
         val cert = generateSelfSignedCert(keyPair)
         ks.setKeyEntry("atv_client", keyPair.private, "gotvremote".toCharArray(), arrayOf(cert))
-
         certFile.outputStream().use { ks.store(it, "gotvremote".toCharArray()) }
         keyStore = ks
         return ks
     }
 
-    private fun generateSelfSignedCert(keyPair: KeyPair): X509Certificate {
-        val subject = "CN=GOtv Remote, O=GOtvRemote, L=Home"
-        val sn = BigInteger.valueOf(System.currentTimeMillis())
-        val notBefore = java.util.Date(System.currentTimeMillis() - 24 * 60 * 60 * 1000)
-        val notAfter = java.util.Date(System.currentTimeMillis() + 10L * 365 * 24 * 60 * 60 * 1000)
-
-        // Use Android's built-in X509 generator
-        val gen = Class.forName("android.security.keystore.AndroidKeyStoreProvider")
-        // Fallback: use Bouncy Castle style self-signed cert generation via reflection
-        // For simplicity, use a basic approach that works on Android
-        return createCertificateViaAndroid(keyPair, subject, sn, notBefore, notAfter)
-    }
-
     @Suppress("DEPRECATION")
-    private fun createCertificateViaAndroid(
-        keyPair: KeyPair, subject: String, serialNumber: BigInteger,
-        notBefore: java.util.Date, notAfter: java.util.Date
-    ): X509Certificate {
-        // Use android.sun.security for self-signed cert generation
+    private fun generateSelfSignedCert(keyPair: KeyPair): X509Certificate {
+        val subject = "CN=GOtv Remote"
+        val sn = BigInteger.valueOf(System.currentTimeMillis())
+        val notBefore = java.util.Date(System.currentTimeMillis() - 86400000)
+        val notAfter = java.util.Date(System.currentTimeMillis() + 10L * 365 * 86400000)
+
+        // Try sun.security (available on most Android versions)
         try {
-            val x500Name = Class.forName("sun.security.x509.X500Name")
+            val x500 = Class.forName("sun.security.x509.X500Name")
                 .getConstructor(String::class.java).newInstance(subject)
+            val infoClass = Class.forName("sun.security.x509.X509CertInfo")
+            val info = infoClass.newInstance()
+            val set = infoClass.getMethod("set", String::class.java, Any::class.java)
 
-            val certInfoClass = Class.forName("sun.security.x509.X509CertInfo")
-            val certInfo = certInfoClass.newInstance()
-
-            val certImplClass = Class.forName("sun.security.x509.X509CertImpl")
-            val algIdClass = Class.forName("sun.security.x509.AlgorithmId")
-            val certValClass = Class.forName("sun.security.x509.CertificateValidity")
-            val serialNumClass = Class.forName("sun.security.x509.CertificateSerialNumber")
-            val certVersionClass = Class.forName("sun.security.x509.CertificateVersion")
-
-            val validity = certValClass.getConstructor(java.util.Date::class.java, java.util.Date::class.java)
+            val validity = Class.forName("sun.security.x509.CertificateValidity")
+                .getConstructor(java.util.Date::class.java, java.util.Date::class.java)
                 .newInstance(notBefore, notAfter)
 
-            val setMethod = certInfoClass.getMethod("set", String::class.java, Any::class.java)
-            setMethod.invoke(certInfo, "validity", validity)
-            setMethod.invoke(certInfo, "serialNumber",
-                serialNumClass.getConstructor(BigInteger::class.java).newInstance(serialNumber))
-            setMethod.invoke(certInfo, "subject", x500Name)
-            setMethod.invoke(certInfo, "issuer", x500Name)
-            setMethod.invoke(certInfo, "key",
+            set.invoke(info, "validity", validity)
+            set.invoke(info, "serialNumber",
+                Class.forName("sun.security.x509.CertificateSerialNumber")
+                    .getConstructor(BigInteger::class.java).newInstance(sn))
+            set.invoke(info, "subject", x500)
+            set.invoke(info, "issuer", x500)
+            set.invoke(info, "key",
                 Class.forName("sun.security.x509.CertificateX509Key")
                     .getConstructor(PublicKey::class.java).newInstance(keyPair.public))
-            setMethod.invoke(certInfo, "version",
-                certVersionClass.getConstructor(Int::class.java).newInstance(2))
+            set.invoke(info, "version",
+                Class.forName("sun.security.x509.CertificateVersion")
+                    .getConstructor(Int::class.java).newInstance(2))
 
+            val algIdClass = Class.forName("sun.security.x509.AlgorithmId")
             val algId = algIdClass.getMethod("get", String::class.java).invoke(null, "SHA256withRSA")
-            setMethod.invoke(certInfo, "algorithmID",
+            set.invoke(info, "algorithmID",
                 Class.forName("sun.security.x509.CertificateAlgorithmId")
                     .getConstructor(algIdClass).newInstance(algId))
 
-            val cert = certImplClass.getConstructor(certInfoClass).newInstance(certInfo) as X509Certificate
-            certImplClass.getMethod("sign", PrivateKey::class.java, String::class.java)
+            val implClass = Class.forName("sun.security.x509.X509CertImpl")
+            val cert = implClass.getConstructor(infoClass).newInstance(info) as X509Certificate
+            implClass.getMethod("sign", PrivateKey::class.java, String::class.java)
                 .invoke(cert, keyPair.private, "SHA256withRSA")
-
             return cert
         } catch (e: Exception) {
-            // Fallback: simple DER-based self-signed certificate
-            return createSimpleSelfSignedCert(keyPair, notBefore, notAfter, serialNumber)
+            Log.w(TAG, "sun.security failed, using DER fallback", e)
+            return createDerCert(keyPair, notBefore, notAfter, sn)
         }
     }
 
-    private fun createSimpleSelfSignedCert(
-        keyPair: KeyPair,
-        notBefore: java.util.Date,
-        notAfter: java.util.Date,
-        serialNumber: BigInteger
-    ): X509Certificate {
-        // Build a minimal X.509v3 cert using raw DER encoding
+    private fun createDerCert(kp: KeyPair, nb: java.util.Date, na: java.util.Date, sn: BigInteger): X509Certificate {
         val sig = Signature.getInstance("SHA256withRSA")
-        sig.initSign(keyPair.private)
-
-        val subject = "CN=GOtv Remote"
-        val tbsCert = buildTbsCertificate(keyPair.public, subject, serialNumber, notBefore, notAfter)
-        sig.update(tbsCert)
-        val signature = sig.sign()
-
-        val certDer = buildSignedCertificate(tbsCert, signature)
-        val cf = java.security.cert.CertificateFactory.getInstance("X.509")
-        return cf.generateCertificate(ByteArrayInputStream(certDer)) as X509Certificate
-    }
-
-    private fun buildTbsCertificate(
-        publicKey: PublicKey, subject: String, serial: BigInteger,
-        notBefore: java.util.Date, notAfter: java.util.Date
-    ): ByteArray {
-        val out = ByteArrayOutputStream()
-
-        // Version v3
-        out.write(derTag(0xA0, derInt(2)))
-        // Serial number
-        out.write(derInt(serial))
-        // Signature algorithm: SHA256withRSA
-        out.write(derSequence(derOid(byteArrayOf(0x2A.toByte(), 0x86.toByte(), 0x48.toByte(), 0x86.toByte(), 0xF7.toByte(), 0x0D, 0x01, 0x01, 0x0B)) + derNull()))
-        // Issuer
-        out.write(derSequence(derSet(derSequence(derOid(byteArrayOf(0x55, 0x04, 0x03)) + derUtf8(subject.removePrefix("CN="))))))
-        // Validity
-        out.write(derSequence(derUtcTime(notBefore) + derUtcTime(notAfter)))
-        // Subject
-        out.write(derSequence(derSet(derSequence(derOid(byteArrayOf(0x55, 0x04, 0x03)) + derUtf8(subject.removePrefix("CN="))))))
-        // Public key info
-        out.write(publicKey.encoded)
-
-        return derSequence(out.toByteArray())
-    }
-
-    private fun buildSignedCertificate(tbsCert: ByteArray, signature: ByteArray): ByteArray {
-        val sigAlg = derSequence(derOid(byteArrayOf(0x2A.toByte(), 0x86.toByte(), 0x48.toByte(), 0x86.toByte(), 0xF7.toByte(), 0x0D, 0x01, 0x01, 0x0B)) + derNull())
-        val sigBits = derBitString(signature)
-        return derSequence(tbsCert + sigAlg + sigBits)
-    }
-
-    // DER encoding helpers
-    private fun derTag(tag: Int, content: ByteArray): ByteArray =
-        byteArrayOf(tag.toByte()) + derLength(content.size) + content
-
-    private fun derSequence(content: ByteArray): ByteArray = derTag(0x30, content)
-    private fun derSet(content: ByteArray): ByteArray = derTag(0x31, content)
-    private fun derOid(oid: ByteArray): ByteArray = derTag(0x06, oid)
-    private fun derNull(): ByteArray = byteArrayOf(0x05, 0x00)
-    private fun derUtf8(s: String): ByteArray = derTag(0x0C, s.toByteArray(Charsets.UTF_8))
-    private fun derBitString(data: ByteArray): ByteArray = derTag(0x03, byteArrayOf(0x00) + data)
-
-    private fun derInt(value: Int): ByteArray = derInt(BigInteger.valueOf(value.toLong()))
-    private fun derInt(value: BigInteger): ByteArray {
-        val bytes = value.toByteArray()
-        return derTag(0x02, bytes)
-    }
-
-    private fun derUtcTime(date: java.util.Date): ByteArray {
+        sig.initSign(kp.private)
         val sdf = java.text.SimpleDateFormat("yyMMddHHmmss'Z'", java.util.Locale.US)
-        sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
-        return derTag(0x17, sdf.format(date).toByteArray(Charsets.US_ASCII))
-    }
+            .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+        val sha256rsa = byteArrayOf(0x2A.toByte(),0x86.toByte(),0x48.toByte(),0x86.toByte(),0xF7.toByte(),0x0D,0x01,0x01,0x0B)
 
-    private fun derLength(len: Int): ByteArray {
-        if (len < 128) return byteArrayOf(len.toByte())
-        val bytes = BigInteger.valueOf(len.toLong()).toByteArray().dropWhile { it == 0.toByte() }.toByteArray()
-        return byteArrayOf((0x80 or bytes.size).toByte()) + bytes
+        fun tag(t: Int, c: ByteArray): ByteArray {
+            val len = if (c.size < 128) byteArrayOf(c.size.toByte())
+            else { val b = BigInteger.valueOf(c.size.toLong()).toByteArray().dropWhile { it == 0.toByte() }.toByteArray(); byteArrayOf((0x80 or b.size).toByte()) + b }
+            return byteArrayOf(t.toByte()) + len + c
+        }
+        fun seq(c: ByteArray) = tag(0x30, c)
+        fun set(c: ByteArray) = tag(0x31, c)
+
+        val cn = "GOtv Remote".toByteArray(Charsets.UTF_8)
+        val name = seq(set(seq(tag(0x06, byteArrayOf(0x55,0x04,0x03)) + tag(0x0C, cn))))
+        val validity = seq(tag(0x17, sdf.format(nb).toByteArray()) + tag(0x17, sdf.format(na).toByteArray()))
+        val algSeq = seq(tag(0x06, sha256rsa) + byteArrayOf(0x05,0x00))
+
+        val tbs = seq(tag(0xA0, tag(0x02, byteArrayOf(2))) + tag(0x02, sn.toByteArray()) + algSeq + name + validity + name + kp.public.encoded)
+        sig.update(tbs); val s = sig.sign()
+        val der = seq(tbs + algSeq + tag(0x03, byteArrayOf(0x00) + s))
+        return java.security.cert.CertificateFactory.getInstance("X.509").generateCertificate(ByteArrayInputStream(der)) as X509Certificate
     }
 
     private fun getSSLContext(): SSLContext {
         sslContext?.let { return it }
-
         val ks = getOrCreateKeyStore()
         val kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm())
         kmf.init(ks, "gotvremote".toCharArray())
-
-        val trustAll = arrayOf<TrustManager>(object : X509TrustManager {
-            override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
-            override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
-            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+        val tm = arrayOf<TrustManager>(object : X509TrustManager {
+            override fun checkClientTrusted(c: Array<X509Certificate>, a: String) {}
+            override fun checkServerTrusted(c: Array<X509Certificate>, a: String) {}
+            override fun getAcceptedIssuers() = arrayOf<X509Certificate>()
         })
-
         val ctx = SSLContext.getInstance("TLSv1.2")
-        ctx.init(kmf.keyManagers, trustAll, SecureRandom())
+        ctx.init(kmf.keyManagers, tm, SecureRandom())
         sslContext = ctx
         return ctx
     }
@@ -351,49 +203,46 @@ class AndroidTvRemote(private val context: Context) {
         scope.launch {
             try {
                 val sf = getSSLContext().socketFactory
-
-                // Try connecting to command port
                 val socket = sf.createSocket() as SSLSocket
                 socket.connect(InetSocketAddress(host, COMMAND_PORT), CONNECT_TIMEOUT_MS)
-                socket.soTimeout = 0
+                socket.soTimeout = 15000
                 socket.startHandshake()
 
                 commandSocket = socket
                 commandOut = socket.outputStream
                 commandIn = socket.inputStream
 
-                // Check if we need to pair (server will close if not paired)
-                isPaired = true
                 isConnected = true
+                isPaired = true
 
-                // Send initial configuration
-                sendConfiguration()
-
-                // Start reading responses
+                // Start reading (server sends config first, then pings)
                 startReader()
-                startPingPong()
 
-                withContext(Dispatchers.Main) {
-                    listener?.onConnected()
-                }
+                withContext(Dispatchers.Main) { listener?.onConnected() }
             } catch (e: javax.net.ssl.SSLHandshakeException) {
-                // Not paired yet - need to pair first
+                Log.d(TAG, "Need pairing: ${e.message}")
                 isPaired = false
                 isConnected = false
-                withContext(Dispatchers.Main) {
-                    listener?.onPairingRequired()
-                }
+                withContext(Dispatchers.Main) { listener?.onPairingRequired() }
                 startPairing(host)
-            } catch (e: Exception) {
+            } catch (e: java.net.ConnectException) {
                 isConnected = false
-                withContext(Dispatchers.Main) {
-                    listener?.onError("Connection failed: ${e.message}")
-                }
+                withContext(Dispatchers.Main) { listener?.onError("Cannot reach GOtv at $host - check IP and WiFi") }
+            } catch (e: Exception) {
+                Log.e(TAG, "Connect error", e)
+                isConnected = false
+                withContext(Dispatchers.Main) { listener?.onError("Connection failed: ${e.message}") }
             }
         }
     }
 
-    // ===================== Pairing =====================
+    // ===================== Pairing (Polo Protocol) =====================
+    // OuterMessage fields: protocol_version=1, status=2, pairing_request=10,
+    //   pairing_request_ack=11, options=20, configuration=30, secret=40, secret_ack=41
+    // PairingRequest: service_name=1, client_name=2
+    // Options: input_encodings=1 (Encoding: type=1, symbol_length=2), preferred_role=3
+    // Configuration: encoding=1 (Encoding), client_role=2
+    // Secret: secret=1
 
     private fun startPairing(host: String) {
         scope.launch {
@@ -401,28 +250,49 @@ class AndroidTvRemote(private val context: Context) {
                 val sf = getSSLContext().socketFactory
                 val socket = sf.createSocket() as SSLSocket
                 socket.connect(InetSocketAddress(host, PAIRING_PORT), CONNECT_TIMEOUT_MS)
+                socket.soTimeout = 10000
                 socket.startHandshake()
 
                 pairingSocket = socket
                 pairingOut = socket.outputStream
                 pairingIn = socket.inputStream
 
-                // Step 1: Send pairing request
-                sendPairingRequest()
+                // Step 1: Send pairing_request (field 10)
+                Log.d(TAG, "Sending pairing request")
+                val pairReq = ByteArrayOutputStream()
+                pairReq.write(pbString(1, "atvremote"))  // service_name
+                pairReq.write(pbString(2, "GOtv Remote")) // client_name
+                sendPolo(buildOuterMessage(10, pairReq.toByteArray()))
 
-                // Step 2: Send option message
-                sendPairingOptions()
+                // Read pairing_request_ack
+                val ack1 = readPoloMessage()
+                Log.d(TAG, "Got ack1: ${ack1?.size} bytes")
 
-                // Step 3: Send configuration message
-                sendPairingConfiguration()
+                // Step 2: Send options (field 20)
+                // Options: input_encodings (field 1) = [Encoding(type=HEXADECIMAL(3), symbol_length=6)]
+                //          preferred_role (field 3) = ROLE_TYPE_INPUT (1)
+                val encoding = pbVarint(1, 3) + pbVarint(2, 6)  // type=HEXADECIMAL, symbol_length=6
+                val options = pbBytes(1, encoding) + pbVarint(3, 1)  // input_encodings + preferred_role=INPUT
+                sendPolo(buildOuterMessage(20, options))
 
-                // Read server response - a code should appear on TV
-                readPairingResponse()
+                // Read options response
+                val ack2 = readPoloMessage()
+                Log.d(TAG, "Got ack2: ${ack2?.size} bytes")
+
+                // Step 3: Send configuration (field 30)
+                // Configuration: encoding (field 1) = Encoding(type=3, symbol_length=6), client_role (field 2) = 1
+                val config = pbBytes(1, encoding) + pbVarint(2, 1)
+                sendPolo(buildOuterMessage(30, config))
+
+                // Read configuration_ack - at this point code appears on TV
+                val ack3 = readPoloMessage()
+                Log.d(TAG, "Got ack3: ${ack3?.size} bytes")
 
                 withContext(Dispatchers.Main) {
-                    listener?.onPairingRequired("Enter the code shown on your TV")
+                    listener?.onPairingRequired("Enter the 6-character code shown on your TV")
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "Pairing start failed", e)
                 withContext(Dispatchers.Main) {
                     listener?.onError("Pairing failed: ${e.message}")
                 }
@@ -430,130 +300,126 @@ class AndroidTvRemote(private val context: Context) {
         }
     }
 
-    private fun sendPairingRequest() {
-        val serviceName = "com.gotvremote.app"
-        val deviceName = "GOtv Remote"
-
-        val payload = ByteArrayOutputStream()
-        // Protocol version
-        payload.write(byteArrayOf(8, 2))
-        // Status OK
-        payload.write(byteArrayOf(16, 200.toByte(), 1))
-        // Pairing request tag (82 = field 10, type 2)
-        val innerPayload = ByteArrayOutputStream()
-        // Service name (field 1)
-        innerPayload.write(writeProtobufString(1, serviceName))
-        // Device name (field 2)
-        innerPayload.write(writeProtobufString(2, deviceName))
-        payload.write(writeProtobufBytes(10, innerPayload.toByteArray()))
-
-        sendPairingMessage(payload.toByteArray())
-    }
-
-    private fun sendPairingOptions() {
-        // Option message: encoding=HEXADECIMAL(3), type=INPUT_DEVICE(6), preferred_role=INPUT(1)
-        val payload = byteArrayOf(8, 2, 16, 200.toByte(), 1, 162.toByte(), 1, 8, 10, 4, 8, 3, 16, 6, 24, 1)
-        sendPairingMessage(payload)
-    }
-
-    private fun sendPairingConfiguration() {
-        // Configuration message
-        val payload = byteArrayOf(8, 2, 16, 200.toByte(), 1, 242.toByte(), 1, 8, 10, 4, 8, 3, 16, 6, 16, 1)
-        sendPairingMessage(payload)
-    }
-
     fun submitPairingCode(code: String) {
         scope.launch {
             try {
-                val secret = computePairingSecret(code)
-                sendPairingSecret(secret)
-
-                // Read response
-                val response = readPairingBytes()
-                if (response != null && response.size > 4) {
-                    // Check for success status (200)
-                    isPaired = true
-                    closePairing()
-
+                val trimmed = code.trim().uppercase()
+                if (trimmed.length != 6) {
                     withContext(Dispatchers.Main) {
-                        listener?.onPairingComplete()
+                        listener?.onError("Code must be exactly 6 characters")
                     }
-
-                    // Now connect with command channel
-                    delay(500)
-                    connect(serverHost)
-                } else {
-                    withContext(Dispatchers.Main) {
-                        listener?.onError("Pairing failed - wrong code?")
-                    }
+                    return@launch
                 }
+
+                // Validate hex
+                try { trimmed.toLong(16) } catch (e: NumberFormatException) {
+                    withContext(Dispatchers.Main) {
+                        listener?.onError("Code must be hexadecimal (0-9, A-F)")
+                    }
+                    return@launch
+                }
+
+                // Compute secret hash
+                val hash = computeSecret(trimmed)
+
+                // Verify: first byte of hash must match first 2 hex chars of code
+                val expectedFirstByte = trimmed.substring(0, 2).toInt(16)
+                if ((hash[0].toInt() and 0xFF) != expectedFirstByte) {
+                    Log.w(TAG, "Hash mismatch: hash[0]=${hash[0].toInt() and 0xFF}, expected=$expectedFirstByte")
+                    withContext(Dispatchers.Main) {
+                        listener?.onError("Invalid code - please check and try again")
+                    }
+                    // Restart pairing
+                    closePairing()
+                    startPairing(serverHost)
+                    return@launch
+                }
+
+                // Send secret (field 40), inner secret on field 1
+                val secretPayload = pbBytes(1, hash)
+                sendPolo(buildOuterMessage(40, secretPayload))
+
+                // Read secret_ack
+                val ack = readPoloMessage()
+                Log.d(TAG, "Got secret ack: ${ack?.size} bytes")
+
+                isPaired = true
+                closePairing()
+
+                withContext(Dispatchers.Main) { listener?.onPairingComplete() }
+
+                delay(1000)
+                connect(serverHost)
+
             } catch (e: Exception) {
+                Log.e(TAG, "Pairing code submission failed", e)
                 withContext(Dispatchers.Main) {
                     listener?.onError("Pairing error: ${e.message}")
                 }
+                closePairing()
+                startPairing(serverHost)
             }
         }
     }
 
-    private fun computePairingSecret(code: String): ByteArray {
-        // The secret is computed from a SHA-256 hash combining
-        // client cert, server cert, and the pairing code
+    private fun computeSecret(code: String): ByteArray {
         val md = MessageDigest.getInstance("SHA-256")
 
-        // Get client certificate
+        // Client certificate modulus & exponent (as hex string bytes)
         val ks = getOrCreateKeyStore()
         val clientCert = ks.getCertificate("atv_client") as? X509Certificate
-
-        // Get server certificate from pairing socket
-        val serverCert = pairingSocket?.session?.peerCertificates?.firstOrNull() as? X509Certificate
-
         if (clientCert != null) {
-            val clientKey = clientCert.publicKey as java.security.interfaces.RSAPublicKey
-            md.update(clientKey.modulus.toByteArray())
-            md.update(clientKey.publicExponent.toByteArray())
+            val key = clientCert.publicKey as RSAPublicKey
+            md.update(hexToBytes(key.modulus.toString(16).uppercase()))
+            // Exponent: padded with leading 0
+            md.update(hexToBytes("0" + key.publicExponent.toString(16).uppercase()))
         }
 
+        // Server certificate modulus & exponent
+        val serverCert = pairingSocket?.session?.peerCertificates?.firstOrNull() as? X509Certificate
         if (serverCert != null) {
-            val serverKey = serverCert.publicKey as java.security.interfaces.RSAPublicKey
-            md.update(serverKey.modulus.toByteArray())
-            md.update(serverKey.publicExponent.toByteArray())
+            val key = serverCert.publicKey as RSAPublicKey
+            md.update(hexToBytes(key.modulus.toString(16).uppercase()))
+            md.update(hexToBytes("0" + key.publicExponent.toString(16).uppercase()))
         }
 
-        // Add the code (convert hex characters)
-        for (ch in code) {
-            val hexValue = if (ch.isDigit()) ch - '0' else ch.uppercaseChar() - 'A' + 10
-            md.update(byteArrayOf(hexValue.toByte()))
-        }
+        // Last 4 hex chars of the code (indices 2..5)
+        md.update(hexToBytes(code.substring(2)))
 
         return md.digest()
     }
 
-    private fun sendPairingSecret(secret: ByteArray) {
-        val payload = ByteArrayOutputStream()
-        payload.write(byteArrayOf(8, 2, 16, 200.toByte(), 1))
-        // Secret tag (field 12)
-        payload.write(writeProtobufBytes(12, secret))
-        sendPairingMessage(payload.toByteArray())
+    private fun hexToBytes(hex: String): ByteArray {
+        val clean = if (hex.length % 2 != 0) "0$hex" else hex
+        return ByteArray(clean.length / 2) { i ->
+            clean.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+        }
     }
 
-    private fun sendPairingMessage(data: ByteArray) {
+    private fun buildOuterMessage(fieldNumber: Int, payload: ByteArray): ByteArray {
+        val msg = ByteArrayOutputStream()
+        msg.write(pbVarint(1, 2))       // protocol_version = 2
+        msg.write(pbVarint(2, 200))     // status = STATUS_OK (200)
+        msg.write(pbBytes(fieldNumber, payload))
+        return msg.toByteArray()
+    }
+
+    private fun sendPolo(data: ByteArray) {
         val out = pairingOut ?: return
         synchronized(out) {
-            out.write(data.size)
+            // Length-prefixed (single byte for small messages, varint for larger)
+            val lenBuf = ByteArrayOutputStream()
+            writeVarintTo(lenBuf, data.size)
+            out.write(lenBuf.toByteArray())
             out.write(data)
             out.flush()
         }
     }
 
-    private fun readPairingResponse() {
-        readPairingBytes() // Read acknowledgment messages
-        readPairingBytes()
-    }
-
-    private fun readPairingBytes(): ByteArray? {
+    private fun readPoloMessage(): ByteArray? {
         val input = pairingIn ?: return null
         return try {
-            val size = input.read()
+            val size = readVarintFrom(input)
             if (size <= 0) return null
             val data = ByteArray(size)
             var read = 0
@@ -564,94 +430,53 @@ class AndroidTvRemote(private val context: Context) {
             }
             data
         } catch (e: Exception) {
+            Log.w(TAG, "readPoloMessage error: ${e.message}")
             null
         }
     }
 
     private fun closePairing() {
         try { pairingSocket?.close() } catch (_: Exception) {}
-        pairingSocket = null
-        pairingOut = null
-        pairingIn = null
+        pairingSocket = null; pairingOut = null; pairingIn = null
     }
 
-    // ===================== Command Sending =====================
+    // ===================== Command Protocol (RemoteMessage) =====================
+    // RemoteMessage fields: remote_configure=1, remote_set_active=2,
+    //   remote_ping_request=8, remote_ping_response=9, remote_key_inject=10
+    // RemoteKeyInject: key_code=1, direction=2
+    // RemotePingResponse: val1=1
 
-    private fun sendConfiguration() {
-        // Send initial config to identify ourselves as a remote
-        // Field 1: config message
-        val config = ByteArrayOutputStream()
-        // model = 622 (device type)
-        config.write(writeProtobufVarint(1, 622))
-        // app_version
-        config.write(writeProtobufString(3, "1"))
-        // vendor
-        config.write(writeProtobufString(4, "1"))
-        // model_name = "androidtv-remote2"
-        config.write(writeProtobufString(5, "androidtv-remote2"))
-        // version
-        config.write(writeProtobufString(6, "1.0.0"))
-
-        val wrapper = ByteArrayOutputStream()
-        wrapper.write(writeProtobufBytes(1, config.toByteArray()))
-        sendCommandMessage(wrapper.toByteArray())
-
-        // Send device info
-        val devInfo = ByteArrayOutputStream()
-        devInfo.write(writeProtobufVarint(1, 622))
-        sendCommandMessage(writeProtobufBytes(2, devInfo.toByteArray()))
-    }
-
-    /**
-     * Send a key press event.
-     * @param keyCode Android KeyEvent constant
-     * @param action 1=ACTION_DOWN, 2=ACTION_UP, 3=SHORT_PRESS (down+up)
-     */
-    fun sendKeyEvent(keyCode: Int, action: Int = 3) {
-        if (!isConnected) return
-
-        scope.launch {
-            try {
-                if (action == 3) {
-                    // Short press: send DOWN then UP
-                    sendKeyAction(keyCode, 1) // DOWN
-                    delay(50)
-                    sendKeyAction(keyCode, 2) // UP
-                } else {
-                    sendKeyAction(keyCode, action)
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    listener?.onError("Send failed: ${e.message}")
-                }
-            }
-        }
-    }
-
-    private fun sendKeyAction(keyCode: Int, action: Int) {
-        // Key event message: field 10, then keyCode and action
-        val inner = ByteArrayOutputStream()
-        inner.write(writeProtobufVarint(1, keyCode))
-        inner.write(writeProtobufVarint(2, action))
-        val msg = writeProtobufBytes(10, inner.toByteArray())
-        sendCommandMessage(msg)
-    }
-
-    /**
-     * Send a command by button name (e.g. "POWER", "VOL_UP", "OK")
-     */
     fun sendCommand(buttonName: String): Boolean {
         val keyCode = KEY_MAP[buttonName] ?: return false
         sendKeyEvent(keyCode)
         return true
     }
 
-    private fun sendCommandMessage(data: ByteArray) {
+    fun sendKeyEvent(keyCode: Int) {
+        if (!isConnected) return
+        scope.launch {
+            try {
+                // SHORT press: direction=3 in the proto means SHORT
+                // But we send DOWN(1) then UP(2) for compatibility
+                val down = pbBytes(10, pbVarint(1, keyCode) + pbVarint(2, 1))
+                sendCommand(down)
+                delay(50)
+                val up = pbBytes(10, pbVarint(1, keyCode) + pbVarint(2, 2))
+                sendCommand(up)
+            } catch (e: Exception) {
+                Log.e(TAG, "sendKeyEvent failed", e)
+                withContext(Dispatchers.Main) { listener?.onError("Send failed") }
+            }
+        }
+    }
+
+    private fun sendCommand(data: ByteArray) {
         val out = commandOut ?: return
         try {
             synchronized(out) {
-                // Write length as varint
-                writeVarint(out, data.size)
+                val lenBuf = ByteArrayOutputStream()
+                writeVarintTo(lenBuf, data.size)
+                out.write(lenBuf.toByteArray())
                 out.write(data)
                 out.flush()
             }
@@ -660,121 +485,155 @@ class AndroidTvRemote(private val context: Context) {
         }
     }
 
-    // ===================== Reading & Ping/Pong =====================
-
     private fun startReader() {
         readerJob = scope.launch {
             try {
                 val input = commandIn ?: return@launch
+
+                // First: read server's initial config message
+                val firstMsg = readCommandMessage(input)
+                Log.d(TAG, "Server config: ${firstMsg?.size} bytes")
+
+                // Send our config response
+                // remote_configure (field 1): code1=622, device_info(field 4) with package etc
+                val devInfo = pbVarint(1, 1) + pbString(2, "1") + pbString(3, "atvremote") + pbString(4, "1.0.0")
+                val configResp = pbBytes(1, pbVarint(1, 622) + pbBytes(4, devInfo))
+                sendCommand(configResp)
+
+                // Send set_active (field 2): code1=622
+                sendCommand(pbBytes(2, pbVarint(1, 622)))
+
+                // Read loop for pings and other messages
                 while (isActive && isConnected) {
-                    val size = readVarint(input)
-                    if (size <= 0) {
+                    val msg = readCommandMessage(input)
+                    if (msg == null) {
                         handleDisconnect()
                         break
                     }
-                    val data = ByteArray(size)
-                    var read = 0
-                    while (read < size) {
-                        val n = input.read(data, read, size - read)
-                        if (n <= 0) {
-                            handleDisconnect()
-                            return@launch
-                        }
-                        read += n
-                    }
-                    handleMessage(data)
+                    handleRemoteMessage(msg)
                 }
             } catch (e: Exception) {
+                Log.w(TAG, "Reader error: ${e.message}")
                 handleDisconnect()
             }
         }
     }
 
-    private fun startPingPong() {
-        pingJob = scope.launch {
-            while (isActive && isConnected) {
-                delay(5000)
-                // Send ping/keepalive
-                try {
-                    val ping = byteArrayOf(74, 2, 8, 25)
-                    commandOut?.let { out ->
-                        synchronized(out) {
-                            out.write(ping)
-                            out.flush()
-                        }
-                    }
-                } catch (e: Exception) {
-                    handleDisconnect()
-                    break
-                }
+    private fun readCommandMessage(input: InputStream): ByteArray? {
+        return try {
+            val size = readVarintFrom(input)
+            if (size <= 0) return null
+            val data = ByteArray(size)
+            var read = 0
+            while (read < size) {
+                val n = input.read(data, read, size - read)
+                if (n <= 0) return null
+                read += n
+            }
+            data
+        } catch (e: Exception) { null }
+    }
+
+    private fun handleRemoteMessage(data: ByteArray) {
+        if (data.isEmpty()) return
+        // Check field tag: field 8 = ping request (tag = 8<<3|2 = 66)
+        if (data[0] == 66.toByte()) {
+            // Respond with pong (field 9 = remote_ping_response)
+            // Echo the val1 from the ping
+            try {
+                // Extract val1 from ping request
+                val inner = extractFieldBytes(data, 8)
+                val val1 = if (inner != null) extractVarintField(inner, 1) else 0
+                val pong = pbBytes(9, pbVarint(1, val1))
+                sendCommand(pong)
+            } catch (_: Exception) {
+                // Fallback: send generic pong
+                sendCommand(pbBytes(9, pbVarint(1, 0)))
             }
         }
     }
 
-    private fun handleMessage(data: ByteArray) {
-        // Parse incoming messages (volume changes, power state, etc.)
-        if (data.size >= 2) {
-            // Check for ping (starts with 66, 6)
-            if (data[0] == 66.toByte()) {
-                // Respond with pong
-                try {
-                    val pong = byteArrayOf(74, 2, 8, 25)
-                    commandOut?.let { out ->
-                        synchronized(out) {
-                            out.write(pong)
-                            out.flush()
-                        }
-                    }
-                } catch (_: Exception) {}
+    private fun extractFieldBytes(data: ByteArray, fieldNum: Int): ByteArray? {
+        var pos = 0
+        while (pos < data.size) {
+            val tag = data[pos].toInt() and 0xFF
+            val fNum = tag ushr 3
+            val wireType = tag and 0x07
+            pos++
+            if (wireType == 2) { // length-delimited
+                if (pos >= data.size) return null
+                val len = data[pos].toInt() and 0xFF
+                pos++
+                if (fNum == fieldNum) {
+                    return data.copyOfRange(pos, minOf(pos + len, data.size))
+                }
+                pos += len
+            } else if (wireType == 0) { // varint
+                while (pos < data.size && data[pos].toInt() and 0x80 != 0) pos++
+                pos++
             }
         }
+        return null
+    }
+
+    private fun extractVarintField(data: ByteArray, fieldNum: Int): Int {
+        var pos = 0
+        while (pos < data.size) {
+            val tag = data[pos].toInt() and 0xFF
+            val fNum = tag ushr 3
+            val wireType = tag and 0x07
+            pos++
+            if (wireType == 0) {
+                var result = 0; var shift = 0
+                while (pos < data.size) {
+                    val b = data[pos].toInt() and 0xFF; pos++
+                    result = result or ((b and 0x7F) shl shift)
+                    if (b and 0x80 == 0) break
+                    shift += 7
+                }
+                if (fNum == fieldNum) return result
+            } else if (wireType == 2) {
+                if (pos >= data.size) return 0
+                val len = data[pos].toInt() and 0xFF; pos++; pos += len
+            }
+        }
+        return 0
     }
 
     private fun handleDisconnect() {
         if (!isConnected) return
         isConnected = false
         readerJob?.cancel()
-        pingJob?.cancel()
-        scope.launch(Dispatchers.Main) {
-            listener?.onDisconnected()
-        }
+        scope.launch(Dispatchers.Main) { listener?.onDisconnected() }
     }
 
     // ===================== Protobuf helpers =====================
 
-    private fun writeProtobufVarint(fieldNumber: Int, value: Int): ByteArray {
+    private fun pbVarint(field: Int, value: Int): ByteArray {
         val out = ByteArrayOutputStream()
-        // Field tag (field_number << 3 | 0)
-        writeVarint(out, (fieldNumber shl 3) or 0)
-        writeVarint(out, value)
+        writeVarintTo(out, (field shl 3) or 0)
+        writeVarintTo(out, value)
         return out.toByteArray()
     }
 
-    private fun writeProtobufString(fieldNumber: Int, value: String): ByteArray {
-        return writeProtobufBytes(fieldNumber, value.toByteArray(Charsets.UTF_8))
-    }
+    private fun pbString(field: Int, value: String) = pbBytes(field, value.toByteArray(Charsets.UTF_8))
 
-    private fun writeProtobufBytes(fieldNumber: Int, value: ByteArray): ByteArray {
+    private fun pbBytes(field: Int, value: ByteArray): ByteArray {
         val out = ByteArrayOutputStream()
-        // Field tag (field_number << 3 | 2)
-        writeVarint(out, (fieldNumber shl 3) or 2)
-        writeVarint(out, value.size)
+        writeVarintTo(out, (field shl 3) or 2)
+        writeVarintTo(out, value.size)
         out.write(value)
         return out.toByteArray()
     }
 
-    private fun writeVarint(out: OutputStream, value: Int) {
+    private fun writeVarintTo(out: OutputStream, value: Int) {
         var v = value
-        while (v > 0x7F) {
-            out.write((v and 0x7F) or 0x80)
-            v = v ushr 7
-        }
+        while (v > 0x7F) { out.write((v and 0x7F) or 0x80); v = v ushr 7 }
         out.write(v and 0x7F)
     }
 
-    private fun readVarint(input: InputStream): Int {
-        var result = 0
-        var shift = 0
+    private fun readVarintFrom(input: InputStream): Int {
+        var result = 0; var shift = 0
         while (true) {
             val b = input.read()
             if (b == -1) return -1
@@ -791,19 +650,12 @@ class AndroidTvRemote(private val context: Context) {
     fun getLastHost(): String? = prefs.getString("last_host", null)
 
     fun disconnect() {
-        isConnected = false
-        isPaired = false
+        isConnected = false; isPaired = false
         readerJob?.cancel()
-        pingJob?.cancel()
         try { commandSocket?.close() } catch (_: Exception) {}
         closePairing()
-        commandSocket = null
-        commandOut = null
-        commandIn = null
+        commandSocket = null; commandOut = null; commandIn = null
     }
 
-    fun destroy() {
-        disconnect()
-        scope.cancel()
-    }
+    fun destroy() { disconnect(); scope.cancel() }
 }
