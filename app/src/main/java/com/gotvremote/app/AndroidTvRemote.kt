@@ -25,6 +25,7 @@ class AndroidTvRemote(private val context: Context) {
     interface Listener {
         fun onConnected()
         fun onDisconnected()
+        fun onReconnecting(attempt: Int, nextRetrySeconds: Int)
         fun onPairingRequired(pairingCode: String? = null)
         fun onPairingComplete()
         fun onError(message: String)
@@ -49,9 +50,11 @@ class AndroidTvRemote(private val context: Context) {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var readerJob: Job? = null
+    private var reconnectJob: Job? = null
 
     @Volatile var isConnected = false; private set
     @Volatile var isPaired = false; private set
+    @Volatile private var userDisconnected = false  // true when user explicitly disconnects
 
     private var serverHost: String = ""
 
@@ -207,7 +210,9 @@ class AndroidTvRemote(private val context: Context) {
 
     fun connect(host: String) {
         serverHost = host
+        userDisconnected = false
         prefs.edit().putString("last_host", host).apply()
+        reconnectJob?.cancel()
 
         scope.launch {
             try {
@@ -229,18 +234,87 @@ class AndroidTvRemote(private val context: Context) {
 
                 withContext(Dispatchers.Main) { listener?.onConnected() }
             } catch (e: javax.net.ssl.SSLHandshakeException) {
-                Log.d(TAG, "Need pairing: ${e.message}")
-                isPaired = false
+                Log.d(TAG, "SSL handshake failed: ${e.message}")
                 isConnected = false
+                // Check if we already have a stored certificate (already paired before)
+                val certFile = File(context.filesDir, "atv_keystore.bks")
+                if (certFile.exists()) {
+                    // Already paired before - streamer probably rejected old cert or is off
+                    // Try deleting keystore and re-pairing
+                    Log.d(TAG, "Have stored cert but handshake failed - need fresh pairing")
+                    certFile.delete()
+                    keyStore = null
+                    sslContext = null
+                }
+                isPaired = false
                 withContext(Dispatchers.Main) { listener?.onPairingRequired() }
                 startPairing(host)
             } catch (e: java.net.ConnectException) {
                 isConnected = false
-                withContext(Dispatchers.Main) { listener?.onError("Cannot reach GOtv at $host - check IP and WiFi") }
+                Log.d(TAG, "ConnectException: ${e.message}")
+                // Streamer is off or unreachable - schedule auto-reconnect
+                scheduleReconnect(host)
+            } catch (e: java.net.SocketTimeoutException) {
+                isConnected = false
+                Log.d(TAG, "Connection timeout: ${e.message}")
+                scheduleReconnect(host)
             } catch (e: Exception) {
                 Log.e(TAG, "Connect error", e)
                 isConnected = false
-                withContext(Dispatchers.Main) { listener?.onError("Connection failed: ${e.message}") }
+                // For any transient error, try to auto-reconnect if we have a saved host
+                scheduleReconnect(host)
+            }
+        }
+    }
+
+    /** Schedule periodic reconnection attempts until successful or user-cancelled */
+    private fun scheduleReconnect(host: String) {
+        if (userDisconnected) return
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch {
+            withContext(Dispatchers.Main) {
+                listener?.onDisconnected()
+            }
+            var attempt = 0
+            while (isActive && !isConnected && !userDisconnected) {
+                attempt++
+                val delaySeconds = when {
+                    attempt <= 3 -> 5L    // First 3 attempts: every 5 seconds
+                    attempt <= 10 -> 10L  // Next 7 attempts: every 10 seconds
+                    else -> 30L           // After that: every 30 seconds
+                }
+                Log.d(TAG, "Auto-reconnect attempt #$attempt in ${delaySeconds}s")
+                withContext(Dispatchers.Main) {
+                    listener?.onReconnecting(attempt, delaySeconds.toInt())
+                }
+                delay(delaySeconds * 1000)
+
+                if (!isActive || isConnected || userDisconnected) break
+
+                // Try to connect
+                try {
+                    val sf = getSSLContext().socketFactory
+                    val socket = sf.createSocket() as SSLSocket
+                    socket.connect(InetSocketAddress(host, COMMAND_PORT), CONNECT_TIMEOUT_MS)
+                    socket.soTimeout = 30000
+                    socket.startHandshake()
+
+                    commandSocket = socket
+                    commandOut = socket.outputStream
+                    commandIn = socket.inputStream
+
+                    isConnected = true
+                    isPaired = true
+
+                    startReader()
+
+                    withContext(Dispatchers.Main) { listener?.onConnected() }
+                    Log.d(TAG, "Auto-reconnect succeeded on attempt #$attempt")
+                    return@launch
+                } catch (e: Exception) {
+                    Log.d(TAG, "Auto-reconnect attempt #$attempt failed: ${e.message}")
+                    // Continue loop
+                }
             }
         }
     }
@@ -450,15 +524,16 @@ class AndroidTvRemote(private val context: Context) {
     }
 
     // ===================== Command Protocol (RemoteMessage) =====================
-    // RemoteMessage fields:
+    // RemoteMessage fields (from remotemessage.proto):
     //   remote_configure=1, remote_set_active=2, remote_error=3,
-    //   remote_ping_request=7, remote_ping_response=8,
-    //   remote_key_inject=10, remote_ime_key_inject=11,
-    //   remote_ime_show_request=13, remote_voice_begin=14, remote_voice_payload=15,
-    //   remote_voice_end=16, remote_start=17, remote_set_volume_level=18,
-    //   remote_adjust_volume_level=19, remote_set_preferred_audio_device=20,
-    //   remote_ime_batch_edit=21, remote_ime_show_request2=22,
-    //   remote_device_info=23, remote_reset_preferred_audio_device=24
+    //   remote_ping_request=8, remote_ping_response=9,
+    //   remote_key_inject=10,
+    //   remote_ime_key_inject=20, remote_ime_batch_edit=21, remote_ime_show_request=22,
+    //   remote_voice_begin=30, remote_voice_payload=31, remote_voice_end=32,
+    //   remote_start=40,
+    //   remote_set_volume_level=50, remote_adjust_volume_level=51,
+    //   remote_set_preferred_audio_device=60, remote_reset_preferred_audio_device=61,
+    //   remote_app_link_launch_request=90
     //
     // RemoteConfigure: code1=1, device_info=2
     // RemoteDeviceInfo: model=1, vendor=2, unknown1=3, unknown2=4, package_name=5, app_version=6
@@ -466,7 +541,8 @@ class AndroidTvRemote(private val context: Context) {
     // RemotePingRequest: val1=1
     // RemotePingResponse: val1=1
     // RemoteKeyInject: key_code=1, direction=2
-    // RemoteSetVolumeLevel: volume_max=1, volume_level=2, muted=3
+    // RemoteSetVolumeLevel: unknown1=1, unknown2=2, player_model=3, unknown4=4, unknown5=5,
+    //   volume_max=6, volume_level=7, volume_muted=8
     // RemoteStart: started=1
 
     fun sendCommand(buttonName: String): Boolean {
@@ -479,12 +555,10 @@ class AndroidTvRemote(private val context: Context) {
         if (!isConnected) return
         scope.launch {
             try {
-                // Send DOWN(1) then UP(2) for key press
-                val down = pbBytes(10, pbVarint(1, keyCode) + pbVarint(2, 1))
-                sendRemoteMessage(down)
-                delay(50)
-                val up = pbBytes(10, pbVarint(1, keyCode) + pbVarint(2, 2))
-                sendRemoteMessage(up)
+                // RemoteDirection: START_LONG=1, END_LONG=2, SHORT=3
+                // Use SHORT press (3) for single button press
+                val keyMsg = pbBytes(10, pbVarint(1, keyCode) + pbVarint(2, 3))
+                sendRemoteMessage(keyMsg)
             } catch (e: Exception) {
                 Log.e(TAG, "sendKeyEvent failed", e)
                 withContext(Dispatchers.Main) { listener?.onError("Send failed") }
@@ -601,35 +675,35 @@ class AndroidTvRemote(private val context: Context) {
                 // remote_error
                 Log.e(TAG, "Server sent remote_error")
             }
-            7 -> {
-                // remote_ping_request - respond with pong (field 8)
+            8 -> {
+                // remote_ping_request - respond with pong (field 9 = remote_ping_response)
                 try {
-                    val inner = extractFieldBytes(data, 7)
+                    val inner = extractFieldBytes(data, 8)
                     val val1 = if (inner != null) extractVarintField(inner, 1) else 0
                     Log.d(TAG, "Ping request val1=$val1, sending pong")
-                    val pong = pbBytes(8, pbVarint(1, val1))
+                    val pong = pbBytes(9, pbVarint(1, val1))
                     sendRemoteMessage(pong)
                 } catch (_: Exception) {
-                    sendRemoteMessage(pbBytes(8, pbVarint(1, 0)))
+                    sendRemoteMessage(pbBytes(9, pbVarint(1, 0)))
                 }
             }
-            8 -> {
-                // remote_ping_response (shouldn't come, but ignore)
+            9 -> {
+                // remote_ping_response (shouldn't come from server, but ignore)
                 Log.d(TAG, "Got ping response (ignoring)")
             }
-            17 -> {
+            40 -> {
                 // remote_start - connection is fully established
-                val inner = extractFieldBytes(data, 17)
+                val inner = extractFieldBytes(data, 40)
                 val started = if (inner != null) extractVarintField(inner, 1) else 0
                 Log.d(TAG, "Got remote_start: started=$started")
             }
-            18 -> {
+            50 -> {
                 // remote_set_volume_level
                 try {
-                    val inner = extractFieldBytes(data, 18)
+                    val inner = extractFieldBytes(data, 50)
                     if (inner != null) {
-                        val max = extractVarintField(inner, 1)
-                        val level = extractVarintField(inner, 2)
+                        val max = extractVarintField(inner, 6)
+                        val level = extractVarintField(inner, 7)
                         Log.d(TAG, "Volume: $level / $max")
                         scope.launch(Dispatchers.Main) { listener?.onVolumeChanged(level, max) }
                     }
@@ -746,7 +820,15 @@ class AndroidTvRemote(private val context: Context) {
         if (!isConnected) return
         isConnected = false
         readerJob?.cancel()
-        scope.launch(Dispatchers.Main) { listener?.onDisconnected() }
+        try { commandSocket?.close() } catch (_: Exception) {}
+        commandSocket = null; commandOut = null; commandIn = null
+        // Auto-reconnect if we have a saved host and user didn't explicitly disconnect
+        if (serverHost.isNotEmpty() && !userDisconnected) {
+            Log.d(TAG, "Connection lost, scheduling auto-reconnect to $serverHost")
+            scheduleReconnect(serverHost)
+        } else {
+            scope.launch(Dispatchers.Main) { listener?.onDisconnected() }
+        }
     }
 
     // ===================== Protobuf helpers =====================
@@ -792,8 +874,10 @@ class AndroidTvRemote(private val context: Context) {
     fun getLastHost(): String? = prefs.getString("last_host", null)
 
     fun disconnect() {
+        userDisconnected = true
         isConnected = false; isPaired = false
         readerJob?.cancel()
+        reconnectJob?.cancel()
         try { commandSocket?.close() } catch (_: Exception) {}
         closePairing()
         commandSocket = null; commandOut = null; commandIn = null

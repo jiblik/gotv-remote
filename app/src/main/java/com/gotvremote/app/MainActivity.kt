@@ -15,6 +15,8 @@ class MainActivity : AppCompatActivity(), AndroidTvRemote.Listener {
 
     private lateinit var remote: AndroidTvRemote
     private lateinit var tvStatus: TextView
+    private var pairingDialog: AlertDialog? = null
+    private var connectDialog: AlertDialog? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,6 +48,9 @@ class MainActivity : AppCompatActivity(), AndroidTvRemote.Listener {
     // ===================== Connection UI =====================
 
     private fun showConnectDialog() {
+        // Dismiss any existing dialogs
+        dismissDialogs()
+
         val input = EditText(this).apply {
             hint = "e.g. 192.168.1.100"
             setText(remote.getLastHost() ?: "")
@@ -55,7 +60,7 @@ class MainActivity : AppCompatActivity(), AndroidTvRemote.Listener {
             setBackgroundColor(0xFFEEEEEE.toInt())
         }
 
-        AlertDialog.Builder(this)
+        connectDialog = AlertDialog.Builder(this)
             .setTitle("Connect to GOtv")
             .setMessage("Enter the IP address of your GOtv streamer.\n\nFind it in: GOtv Settings > Network > IP address")
             .setView(input)
@@ -72,6 +77,12 @@ class MainActivity : AppCompatActivity(), AndroidTvRemote.Listener {
     }
 
     private fun showPairingDialog(message: String?) {
+        // Don't show pairing dialog if already connected
+        if (remote.isConnected) return
+
+        // Dismiss any existing dialogs first
+        dismissDialogs()
+
         val input = EditText(this).apply {
             hint = "e.g. A1B2C3"
             setPadding(48, 32, 48, 32)
@@ -83,7 +94,7 @@ class MainActivity : AppCompatActivity(), AndroidTvRemote.Listener {
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
         }
 
-        AlertDialog.Builder(this)
+        pairingDialog = AlertDialog.Builder(this)
             .setTitle("Pair with GOtv")
             .setMessage(message ?: "Enter the 6-character code shown on your TV screen")
             .setView(input)
@@ -98,6 +109,13 @@ class MainActivity : AppCompatActivity(), AndroidTvRemote.Listener {
             .show()
     }
 
+    private fun dismissDialogs() {
+        try { pairingDialog?.dismiss() } catch (_: Exception) {}
+        try { connectDialog?.dismiss() } catch (_: Exception) {}
+        pairingDialog = null
+        connectDialog = null
+    }
+
     private fun updateStatus(text: String, colorRes: Int) {
         tvStatus.text = text
         tvStatus.setTextColor(getColor(colorRes))
@@ -106,6 +124,8 @@ class MainActivity : AppCompatActivity(), AndroidTvRemote.Listener {
     // ===================== AndroidTvRemote.Listener =====================
 
     override fun onConnected() {
+        // Dismiss any pairing/connect dialogs that might be showing
+        dismissDialogs()
         updateStatus("Connected", R.color.accent_green)
         Toast.makeText(this, "Connected to GOtv!", Toast.LENGTH_SHORT).show()
     }
@@ -114,12 +134,17 @@ class MainActivity : AppCompatActivity(), AndroidTvRemote.Listener {
         updateStatus("Disconnected", R.color.accent_red)
     }
 
+    override fun onReconnecting(attempt: Int, nextRetrySeconds: Int) {
+        updateStatus("Reconnecting (#$attempt)...", R.color.accent_yellow)
+    }
+
     override fun onPairingRequired(pairingCode: String?) {
         updateStatus("Pairing needed", R.color.accent_yellow)
         showPairingDialog(pairingCode)
     }
 
     override fun onPairingComplete() {
+        dismissDialogs()
         Toast.makeText(this, "Pairing successful!", Toast.LENGTH_SHORT).show()
     }
 
