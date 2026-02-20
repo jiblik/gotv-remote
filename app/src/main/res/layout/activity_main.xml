@@ -3,36 +3,37 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bg_primary"
+    android:background="#121212"
     android:fillViewport="true"
-    android:scrollbars="none">
+    android:scrollbars="none"
+    android:overScrollMode="never">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:gravity="center_horizontal"
-        android:paddingHorizontal="24dp"
-        android:paddingTop="12dp"
-        android:paddingBottom="20dp">
+        android:paddingHorizontal="20dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="16dp">
 
-        <!-- Header Bar -->
+        <!-- Status Bar: GOtv title + connection status + settings -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginBottom="16dp">
+            android:paddingVertical="4dp"
+            android:layout_marginBottom="10dp">
 
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="GOtv"
-                android:textColor="@color/text_primary"
-                android:textSize="24sp"
-                android:fontFamily="sans-serif-medium"
-                android:letterSpacing="0.05" />
+                android:text="GOtv Remote"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:fontFamily="sans-serif-medium" />
 
             <TextView
                 android:id="@+id/tvConnectionStatus"
@@ -40,278 +41,305 @@
                 android:layout_height="wrap_content"
                 android:text="Connected"
                 android:textColor="@color/accent_green"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:fontFamily="sans-serif-medium" />
 
             <ImageButton
                 android:id="@+id/btnSettings"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:layout_marginStart="12dp"
-                android:background="@drawable/btn_round"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="10dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@android:drawable/ic_menu_manage"
                 android:contentDescription="Settings"
                 android:scaleType="centerInside"
-                app:tint="@color/text_secondary" />
+                app:tint="#8E8E93" />
         </LinearLayout>
 
-        <!-- Power / Input / Mute Row -->
+        <!-- ===== D-PAD CARD ===== -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="220dp"
+            android:background="@drawable/card_background"
+            android:layout_marginBottom="12dp">
+
+            <!-- Up -->
+            <ImageButton
+                android:id="@+id/btnUp"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_gravity="top|center_horizontal"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/dpad_arrow"
+                android:src="@android:drawable/arrow_up_float"
+                android:scaleType="centerInside"
+                android:contentDescription="Up"
+                app:tint="#8E8E93" />
+
+            <!-- Down -->
+            <ImageButton
+                android:id="@+id/btnDown"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/dpad_arrow"
+                android:src="@android:drawable/arrow_down_float"
+                android:scaleType="centerInside"
+                android:contentDescription="Down"
+                app:tint="#8E8E93" />
+
+            <!-- Left -->
+            <ImageButton
+                android:id="@+id/btnLeft"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_gravity="center_vertical|start"
+                android:layout_marginStart="16dp"
+                android:background="@drawable/dpad_arrow"
+                android:rotation="270"
+                android:src="@android:drawable/arrow_up_float"
+                android:scaleType="centerInside"
+                android:contentDescription="Left"
+                app:tint="#8E8E93" />
+
+            <!-- Right -->
+            <ImageButton
+                android:id="@+id/btnRight"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_gravity="center_vertical|end"
+                android:layout_marginEnd="16dp"
+                android:background="@drawable/dpad_arrow"
+                android:rotation="90"
+                android:src="@android:drawable/arrow_up_float"
+                android:scaleType="centerInside"
+                android:contentDescription="Right"
+                app:tint="#8E8E93" />
+
+            <!-- OK Center -->
+            <Button
+                android:id="@+id/btnOk"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:layout_gravity="center"
+                android:background="@drawable/dpad_center"
+                android:text=""
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:fontFamily="sans-serif-medium" />
+        </FrameLayout>
+
+        <!-- ===== NAV ICONS ROW ===== -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center"
-            android:layout_marginBottom="16dp">
+            android:layout_marginBottom="12dp">
 
+            <!-- Back -->
+            <ImageButton
+                android:id="@+id/btnBack"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:layout_marginHorizontal="6dp"
+                android:background="@drawable/btn_nav"
+                android:src="@android:drawable/ic_menu_revert"
+                android:contentDescription="Back"
+                android:scaleType="centerInside"
+                app:tint="#FFFFFF" />
+
+            <!-- Home -->
+            <ImageButton
+                android:id="@+id/btnHome"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:layout_marginHorizontal="6dp"
+                android:background="@drawable/btn_nav"
+                android:src="@android:drawable/ic_menu_today"
+                android:contentDescription="Home"
+                android:scaleType="centerInside"
+                app:tint="#FFFFFF" />
+
+            <!-- Power -->
             <ImageButton
                 android:id="@+id/btnPower"
                 android:layout_width="52dp"
                 android:layout_height="52dp"
-                android:background="@drawable/btn_round_red"
+                android:layout_marginHorizontal="6dp"
+                android:background="@drawable/btn_nav"
                 android:src="@android:drawable/ic_lock_power_off"
-                android:contentDescription="@string/power"
+                android:contentDescription="Power"
                 android:scaleType="centerInside"
-                app:tint="@color/power_red" />
+                app:tint="@color/accent_red" />
 
-            <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
-
-            <Button
-                android:id="@+id/btnInput"
-                android:layout_width="72dp"
-                android:layout_height="40dp"
-                android:background="@drawable/btn_rect"
-                android:text="INPUT"
-                android:textColor="@color/text_secondary"
-                android:textSize="11sp"
-                android:fontFamily="sans-serif-medium" />
-
-            <View android:layout_width="0dp" android:layout_height="0dp" android:layout_weight="1" />
-
+            <!-- Mute -->
             <ImageButton
                 android:id="@+id/btnMute"
                 android:layout_width="52dp"
                 android:layout_height="52dp"
-                android:background="@drawable/btn_round"
+                android:layout_marginHorizontal="6dp"
+                android:background="@drawable/btn_nav"
                 android:src="@android:drawable/ic_lock_silent_mode"
-                android:contentDescription="@string/mute"
+                android:contentDescription="Mute"
                 android:scaleType="centerInside"
-                app:tint="@color/text_secondary" />
+                app:tint="#FFFFFF" />
+
+            <!-- Menu -->
+            <ImageButton
+                android:id="@+id/btnMenu"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:layout_marginHorizontal="6dp"
+                android:background="@drawable/btn_nav"
+                android:src="@android:drawable/ic_menu_more"
+                android:contentDescription="Menu"
+                android:scaleType="centerInside"
+                app:tint="#FFFFFF" />
         </LinearLayout>
 
-        <!-- Number Pad -->
-        <GridLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:columnCount="3"
-            android:rowCount="4"
-            android:layout_gravity="center"
-            android:layout_marginBottom="16dp">
-
-            <Button android:id="@+id/btn1" android:layout_width="90dp" android:layout_height="48dp"
-                android:layout_margin="3dp" android:background="@drawable/btn_number"
-                android:text="1" android:textColor="@color/text_primary" android:textSize="18sp"
-                android:fontFamily="sans-serif-light" />
-            <Button android:id="@+id/btn2" android:layout_width="90dp" android:layout_height="48dp"
-                android:layout_margin="3dp" android:background="@drawable/btn_number"
-                android:text="2" android:textColor="@color/text_primary" android:textSize="18sp"
-                android:fontFamily="sans-serif-light" />
-            <Button android:id="@+id/btn3" android:layout_width="90dp" android:layout_height="48dp"
-                android:layout_margin="3dp" android:background="@drawable/btn_number"
-                android:text="3" android:textColor="@color/text_primary" android:textSize="18sp"
-                android:fontFamily="sans-serif-light" />
-            <Button android:id="@+id/btn4" android:layout_width="90dp" android:layout_height="48dp"
-                android:layout_margin="3dp" android:background="@drawable/btn_number"
-                android:text="4" android:textColor="@color/text_primary" android:textSize="18sp"
-                android:fontFamily="sans-serif-light" />
-            <Button android:id="@+id/btn5" android:layout_width="90dp" android:layout_height="48dp"
-                android:layout_margin="3dp" android:background="@drawable/btn_number"
-                android:text="5" android:textColor="@color/text_primary" android:textSize="18sp"
-                android:fontFamily="sans-serif-light" />
-            <Button android:id="@+id/btn6" android:layout_width="90dp" android:layout_height="48dp"
-                android:layout_margin="3dp" android:background="@drawable/btn_number"
-                android:text="6" android:textColor="@color/text_primary" android:textSize="18sp"
-                android:fontFamily="sans-serif-light" />
-            <Button android:id="@+id/btn7" android:layout_width="90dp" android:layout_height="48dp"
-                android:layout_margin="3dp" android:background="@drawable/btn_number"
-                android:text="7" android:textColor="@color/text_primary" android:textSize="18sp"
-                android:fontFamily="sans-serif-light" />
-            <Button android:id="@+id/btn8" android:layout_width="90dp" android:layout_height="48dp"
-                android:layout_margin="3dp" android:background="@drawable/btn_number"
-                android:text="8" android:textColor="@color/text_primary" android:textSize="18sp"
-                android:fontFamily="sans-serif-light" />
-            <Button android:id="@+id/btn9" android:layout_width="90dp" android:layout_height="48dp"
-                android:layout_margin="3dp" android:background="@drawable/btn_number"
-                android:text="9" android:textColor="@color/text_primary" android:textSize="18sp"
-                android:fontFamily="sans-serif-light" />
-            <Button android:id="@+id/btnLast" android:layout_width="90dp" android:layout_height="48dp"
-                android:layout_margin="3dp" android:background="@drawable/btn_rect"
-                android:text="LAST" android:textColor="@color/text_dim" android:textSize="10sp"
-                android:fontFamily="sans-serif-medium" />
-            <Button android:id="@+id/btn0" android:layout_width="90dp" android:layout_height="48dp"
-                android:layout_margin="3dp" android:background="@drawable/btn_number"
-                android:text="0" android:textColor="@color/text_primary" android:textSize="18sp"
-                android:fontFamily="sans-serif-light" />
-            <Button android:id="@+id/btnGuide" android:layout_width="90dp" android:layout_height="48dp"
-                android:layout_margin="3dp" android:background="@drawable/btn_gotv_accent"
-                android:text="GUIDE" android:textColor="@color/white" android:textSize="10sp"
-                android:fontFamily="sans-serif-medium" />
-        </GridLayout>
-
-        <!-- D-Pad Section with Vol/Ch -->
+        <!-- ===== VOLUME + CHANNEL PILLS ===== -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center"
-            android:layout_marginBottom="14dp">
+            android:layout_marginBottom="12dp">
 
-            <!-- Volume -->
+            <!-- Volume Pill -->
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
                 android:orientation="vertical"
-                android:gravity="center">
+                android:background="@drawable/pill_volume"
+                android:gravity="center"
+                android:paddingVertical="6dp">
 
                 <Button
                     android:id="@+id/btnVolUp"
-                    android:layout_width="52dp"
-                    android:layout_height="56dp"
-                    android:background="@drawable/btn_volume"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:background="?attr/selectableItemBackground"
                     android:text="+"
-                    android:textColor="@color/text_primary"
-                    android:textSize="20sp" />
+                    android:textColor="#FFFFFF"
+                    android:textSize="22sp"
+                    android:fontFamily="sans-serif-light" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="VOL"
-                    android:textColor="@color/text_dim"
-                    android:textSize="9sp"
+                    android:textColor="#636366"
+                    android:textSize="10sp"
                     android:fontFamily="sans-serif-medium"
-                    android:letterSpacing="0.1"
-                    android:layout_marginVertical="3dp" />
+                    android:letterSpacing="0.15" />
 
                 <Button
                     android:id="@+id/btnVolDown"
-                    android:layout_width="52dp"
-                    android:layout_height="56dp"
-                    android:background="@drawable/btn_volume"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:background="?attr/selectableItemBackground"
                     android:text="-"
-                    android:textColor="@color/text_primary"
-                    android:textSize="20sp" />
+                    android:textColor="#FFFFFF"
+                    android:textSize="22sp"
+                    android:fontFamily="sans-serif-light" />
             </LinearLayout>
 
-            <!-- D-Pad -->
-            <FrameLayout
-                android:layout_width="170dp"
-                android:layout_height="170dp"
-                android:layout_marginHorizontal="10dp">
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/dpad_background" />
-
-                <ImageButton
-                    android:id="@+id/btnUp"
-                    android:layout_width="50dp"
-                    android:layout_height="50dp"
-                    android:layout_gravity="top|center_horizontal"
-                    android:layout_marginTop="6dp"
-                    android:background="@drawable/dpad_arrow"
-                    android:src="@android:drawable/arrow_up_float"
-                    android:scaleType="centerInside"
-                    android:contentDescription="Up"
-                    app:tint="@color/text_secondary" />
-
-                <ImageButton
-                    android:id="@+id/btnDown"
-                    android:layout_width="50dp"
-                    android:layout_height="50dp"
-                    android:layout_gravity="bottom|center_horizontal"
-                    android:layout_marginBottom="6dp"
-                    android:background="@drawable/dpad_arrow"
-                    android:src="@android:drawable/arrow_down_float"
-                    android:scaleType="centerInside"
-                    android:contentDescription="Down"
-                    app:tint="@color/text_secondary" />
-
-                <ImageButton
-                    android:id="@+id/btnLeft"
-                    android:layout_width="50dp"
-                    android:layout_height="50dp"
-                    android:layout_gravity="center_vertical|start"
-                    android:layout_marginStart="6dp"
-                    android:background="@drawable/dpad_arrow"
-                    android:rotation="270"
-                    android:src="@android:drawable/arrow_up_float"
-                    android:scaleType="centerInside"
-                    android:contentDescription="Left"
-                    app:tint="@color/text_secondary" />
-
-                <ImageButton
-                    android:id="@+id/btnRight"
-                    android:layout_width="50dp"
-                    android:layout_height="50dp"
-                    android:layout_gravity="center_vertical|end"
-                    android:layout_marginEnd="6dp"
-                    android:background="@drawable/dpad_arrow"
-                    android:rotation="90"
-                    android:src="@android:drawable/arrow_up_float"
-                    android:scaleType="centerInside"
-                    android:contentDescription="Right"
-                    app:tint="@color/text_secondary" />
-
-                <Button
-                    android:id="@+id/btnOk"
-                    android:layout_width="62dp"
-                    android:layout_height="62dp"
-                    android:layout_gravity="center"
-                    android:background="@drawable/dpad_center"
-                    android:text="OK"
-                    android:textColor="@color/white"
-                    android:textSize="14sp"
-                    android:fontFamily="sans-serif-medium" />
-            </FrameLayout>
-
-            <!-- Channel -->
+            <!-- Channel Pill -->
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
                 android:orientation="vertical"
-                android:gravity="center">
+                android:background="@drawable/pill_volume"
+                android:gravity="center"
+                android:paddingVertical="6dp">
 
                 <Button
                     android:id="@+id/btnChUp"
-                    android:layout_width="52dp"
-                    android:layout_height="56dp"
-                    android:background="@drawable/btn_channel"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:background="?attr/selectableItemBackground"
                     android:text="+"
-                    android:textColor="@color/text_primary"
-                    android:textSize="20sp" />
+                    android:textColor="#FFFFFF"
+                    android:textSize="22sp"
+                    android:fontFamily="sans-serif-light" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="CH"
-                    android:textColor="@color/text_dim"
-                    android:textSize="9sp"
+                    android:textColor="#636366"
+                    android:textSize="10sp"
                     android:fontFamily="sans-serif-medium"
-                    android:letterSpacing="0.1"
-                    android:layout_marginVertical="3dp" />
+                    android:letterSpacing="0.15" />
 
                 <Button
                     android:id="@+id/btnChDown"
-                    android:layout_width="52dp"
-                    android:layout_height="56dp"
-                    android:background="@drawable/btn_channel"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:background="?attr/selectableItemBackground"
                     android:text="-"
-                    android:textColor="@color/text_primary"
-                    android:textSize="20sp" />
+                    android:textColor="#FFFFFF"
+                    android:textSize="22sp"
+                    android:fontFamily="sans-serif-light" />
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Nav Row: Menu, Home, Back, Info -->
+        <!-- ===== NUMBER PAD ===== -->
+        <GridLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:columnCount="3"
+            android:rowCount="4"
+            android:layout_gravity="center"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/card_background"
+            android:padding="8dp">
+
+            <Button android:id="@+id/btn1" android:layout_columnWeight="1" android:layout_width="0dp" android:layout_height="46dp"
+                android:layout_margin="3dp" android:background="@drawable/btn_number"
+                android:text="1" android:textColor="#FFFFFF" android:textSize="18sp" android:fontFamily="sans-serif-light" />
+            <Button android:id="@+id/btn2" android:layout_columnWeight="1" android:layout_width="0dp" android:layout_height="46dp"
+                android:layout_margin="3dp" android:background="@drawable/btn_number"
+                android:text="2" android:textColor="#FFFFFF" android:textSize="18sp" android:fontFamily="sans-serif-light" />
+            <Button android:id="@+id/btn3" android:layout_columnWeight="1" android:layout_width="0dp" android:layout_height="46dp"
+                android:layout_margin="3dp" android:background="@drawable/btn_number"
+                android:text="3" android:textColor="#FFFFFF" android:textSize="18sp" android:fontFamily="sans-serif-light" />
+            <Button android:id="@+id/btn4" android:layout_columnWeight="1" android:layout_width="0dp" android:layout_height="46dp"
+                android:layout_margin="3dp" android:background="@drawable/btn_number"
+                android:text="4" android:textColor="#FFFFFF" android:textSize="18sp" android:fontFamily="sans-serif-light" />
+            <Button android:id="@+id/btn5" android:layout_columnWeight="1" android:layout_width="0dp" android:layout_height="46dp"
+                android:layout_margin="3dp" android:background="@drawable/btn_number"
+                android:text="5" android:textColor="#FFFFFF" android:textSize="18sp" android:fontFamily="sans-serif-light" />
+            <Button android:id="@+id/btn6" android:layout_columnWeight="1" android:layout_width="0dp" android:layout_height="46dp"
+                android:layout_margin="3dp" android:background="@drawable/btn_number"
+                android:text="6" android:textColor="#FFFFFF" android:textSize="18sp" android:fontFamily="sans-serif-light" />
+            <Button android:id="@+id/btn7" android:layout_columnWeight="1" android:layout_width="0dp" android:layout_height="46dp"
+                android:layout_margin="3dp" android:background="@drawable/btn_number"
+                android:text="7" android:textColor="#FFFFFF" android:textSize="18sp" android:fontFamily="sans-serif-light" />
+            <Button android:id="@+id/btn8" android:layout_columnWeight="1" android:layout_width="0dp" android:layout_height="46dp"
+                android:layout_margin="3dp" android:background="@drawable/btn_number"
+                android:text="8" android:textColor="#FFFFFF" android:textSize="18sp" android:fontFamily="sans-serif-light" />
+            <Button android:id="@+id/btn9" android:layout_columnWeight="1" android:layout_width="0dp" android:layout_height="46dp"
+                android:layout_margin="3dp" android:background="@drawable/btn_number"
+                android:text="9" android:textColor="#FFFFFF" android:textSize="18sp" android:fontFamily="sans-serif-light" />
+            <Button android:id="@+id/btnLast" android:layout_columnWeight="1" android:layout_width="0dp" android:layout_height="46dp"
+                android:layout_margin="3dp" android:background="@drawable/btn_number"
+                android:text="LAST" android:textColor="#636366" android:textSize="9sp" android:fontFamily="sans-serif-medium" />
+            <Button android:id="@+id/btn0" android:layout_columnWeight="1" android:layout_width="0dp" android:layout_height="46dp"
+                android:layout_margin="3dp" android:background="@drawable/btn_number"
+                android:text="0" android:textColor="#FFFFFF" android:textSize="18sp" android:fontFamily="sans-serif-light" />
+            <Button android:id="@+id/btnGuide" android:layout_columnWeight="1" android:layout_width="0dp" android:layout_height="46dp"
+                android:layout_margin="3dp" android:background="@drawable/btn_number"
+                android:text="GUIDE" android:textColor="#636366" android:textSize="9sp" android:fontFamily="sans-serif-medium" />
+        </GridLayout>
+
+        <!-- ===== FUNCTION ROW ===== -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -319,174 +347,102 @@
             android:gravity="center"
             android:layout_marginBottom="10dp">
 
-            <Button
-                android:id="@+id/btnMenu"
-                android:layout_width="0dp"
-                android:layout_height="40dp"
-                android:layout_weight="1"
-                android:layout_marginHorizontal="3dp"
-                android:background="@drawable/btn_nav"
-                android:text="MENU"
-                android:textColor="@color/text_secondary"
-                android:textSize="10sp"
+            <Button android:id="@+id/btnInfo"
+                android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1"
+                android:layout_marginHorizontal="3dp" android:background="@drawable/btn_rect"
+                android:text="INFO" android:textColor="#8E8E93" android:textSize="10sp"
                 android:fontFamily="sans-serif-medium" />
 
-            <Button
-                android:id="@+id/btnHome"
-                android:layout_width="0dp"
-                android:layout_height="40dp"
-                android:layout_weight="1"
-                android:layout_marginHorizontal="3dp"
-                android:background="@drawable/btn_gotv_accent"
-                android:text="HOME"
-                android:textColor="@color/white"
-                android:textSize="10sp"
+            <Button android:id="@+id/btnEpg"
+                android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1"
+                android:layout_marginHorizontal="3dp" android:background="@drawable/btn_rect"
+                android:text="EPG" android:textColor="#8E8E93" android:textSize="10sp"
                 android:fontFamily="sans-serif-medium" />
 
-            <Button
-                android:id="@+id/btnBack"
-                android:layout_width="0dp"
-                android:layout_height="40dp"
-                android:layout_weight="1"
-                android:layout_marginHorizontal="3dp"
-                android:background="@drawable/btn_nav"
-                android:text="BACK"
-                android:textColor="@color/text_secondary"
-                android:textSize="10sp"
+            <Button android:id="@+id/btnFav"
+                android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1"
+                android:layout_marginHorizontal="3dp" android:background="@drawable/btn_rect"
+                android:text="FAV" android:textColor="#8E8E93" android:textSize="10sp"
                 android:fontFamily="sans-serif-medium" />
 
-            <Button
-                android:id="@+id/btnInfo"
-                android:layout_width="0dp"
-                android:layout_height="40dp"
-                android:layout_weight="1"
-                android:layout_marginHorizontal="3dp"
-                android:background="@drawable/btn_nav"
-                android:text="INFO"
-                android:textColor="@color/accent_blue"
-                android:textSize="10sp"
+            <Button android:id="@+id/btnSubtitle"
+                android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1"
+                android:layout_marginHorizontal="3dp" android:background="@drawable/btn_rect"
+                android:text="SUB" android:textColor="#8E8E93" android:textSize="10sp"
+                android:fontFamily="sans-serif-medium" />
+
+            <Button android:id="@+id/btnAudio"
+                android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1"
+                android:layout_marginHorizontal="3dp" android:background="@drawable/btn_rect"
+                android:text="AUDIO" android:textColor="#8E8E93" android:textSize="10sp"
+                android:fontFamily="sans-serif-medium" />
+
+            <Button android:id="@+id/btnInput"
+                android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1"
+                android:layout_marginHorizontal="3dp" android:background="@drawable/btn_rect"
+                android:text="INPUT" android:textColor="#8E8E93" android:textSize="10sp"
                 android:fontFamily="sans-serif-medium" />
         </LinearLayout>
 
-        <!-- Extra Row: EPG, FAV, SUB, Audio -->
+        <!-- ===== MEDIA CONTROLS BAR ===== -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="48dp"
             android:orientation="horizontal"
             android:gravity="center"
-            android:layout_marginBottom="10dp">
-
-            <Button
-                android:id="@+id/btnEpg"
-                android:layout_width="0dp"
-                android:layout_height="36dp"
-                android:layout_weight="1"
-                android:layout_marginHorizontal="3dp"
-                android:background="@drawable/btn_rect"
-                android:text="EPG"
-                android:textColor="@color/text_dim"
-                android:textSize="10sp"
-                android:fontFamily="sans-serif-medium" />
-
-            <Button
-                android:id="@+id/btnFav"
-                android:layout_width="0dp"
-                android:layout_height="36dp"
-                android:layout_weight="1"
-                android:layout_marginHorizontal="3dp"
-                android:background="@drawable/btn_rect"
-                android:text="FAV"
-                android:textColor="@color/accent_yellow"
-                android:textSize="10sp"
-                android:fontFamily="sans-serif-medium" />
-
-            <Button
-                android:id="@+id/btnSubtitle"
-                android:layout_width="0dp"
-                android:layout_height="36dp"
-                android:layout_weight="1"
-                android:layout_marginHorizontal="3dp"
-                android:background="@drawable/btn_rect"
-                android:text="SUB"
-                android:textColor="@color/text_dim"
-                android:textSize="10sp"
-                android:fontFamily="sans-serif-medium" />
-
-            <Button
-                android:id="@+id/btnAudio"
-                android:layout_width="0dp"
-                android:layout_height="36dp"
-                android:layout_weight="1"
-                android:layout_marginHorizontal="3dp"
-                android:background="@drawable/btn_rect"
-                android:text="AUDIO"
-                android:textColor="@color/text_dim"
-                android:textSize="10sp"
-                android:fontFamily="sans-serif-medium" />
-        </LinearLayout>
-
-        <!-- Media Controls -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center">
+            android:background="@drawable/media_bar_bg"
+            android:paddingHorizontal="8dp">
 
             <ImageButton
                 android:id="@+id/btnRewind"
                 android:layout_width="0dp"
-                android:layout_height="40dp"
+                android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:layout_marginHorizontal="2dp"
-                android:background="@drawable/btn_media"
+                android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@android:drawable/ic_media_rew"
                 android:scaleType="centerInside"
-                android:contentDescription="@string/rewind"
-                app:tint="@color/text_secondary" />
+                android:contentDescription="Rewind"
+                app:tint="#8E8E93" />
 
             <ImageButton
                 android:id="@+id/btnPlayPause"
                 android:layout_width="0dp"
-                android:layout_height="40dp"
+                android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:layout_marginHorizontal="2dp"
-                android:background="@drawable/btn_media"
+                android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@android:drawable/ic_media_play"
                 android:scaleType="centerInside"
-                android:contentDescription="@string/play_pause"
-                app:tint="@color/text_primary" />
+                android:contentDescription="Play/Pause"
+                app:tint="#FFFFFF" />
 
             <ImageButton
                 android:id="@+id/btnStop"
                 android:layout_width="0dp"
-                android:layout_height="40dp"
+                android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:layout_marginHorizontal="2dp"
-                android:background="@drawable/btn_media"
+                android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@android:drawable/ic_media_pause"
                 android:scaleType="centerInside"
-                android:contentDescription="@string/stop"
-                app:tint="@color/text_secondary" />
+                android:contentDescription="Stop"
+                app:tint="#8E8E93" />
 
             <ImageButton
                 android:id="@+id/btnFastForward"
                 android:layout_width="0dp"
-                android:layout_height="40dp"
+                android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:layout_marginHorizontal="2dp"
-                android:background="@drawable/btn_media"
+                android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@android:drawable/ic_media_ff"
                 android:scaleType="centerInside"
-                android:contentDescription="@string/fast_forward"
-                app:tint="@color/text_secondary" />
+                android:contentDescription="Fast Forward"
+                app:tint="#8E8E93" />
 
             <Button
                 android:id="@+id/btnRecord"
                 android:layout_width="0dp"
-                android:layout_height="40dp"
+                android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:layout_marginHorizontal="2dp"
-                android:background="@drawable/btn_media"
+                android:background="?attr/selectableItemBackgroundBorderless"
                 android:text="REC"
                 android:textColor="@color/accent_red"
                 android:textSize="10sp"

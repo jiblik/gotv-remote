@@ -1,37 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Base dark theme -->
-    <color name="bg_primary">#0D0D0D</color>
-    <color name="bg_secondary">#1A1A1A</color>
-    <color name="bg_card">#242424</color>
-    <color name="bg_elevated">#2E2E2E</color>
+    <!-- Base -->
+    <color name="bg_primary">#121212</color>
+    <color name="bg_secondary">#1C1C1E</color>
+    <color name="bg_card">#1C1C1E</color>
+    <color name="bg_elevated">#2C2C2E</color>
 
-    <!-- Accent colors -->
-    <color name="accent_primary">#6C63FF</color>
-    <color name="accent_primary_dim">#4A44B2</color>
-    <color name="accent_green">#34D399</color>
-    <color name="accent_red">#F87171</color>
-    <color name="accent_yellow">#FBBF24</color>
-    <color name="accent_blue">#60A5FA</color>
-    <color name="accent_orange">#FB923C</color>
+    <!-- Accent -->
+    <color name="accent_primary">#FFFFFF</color>
+    <color name="accent_primary_dim">#8E8E93</color>
+    <color name="accent_green">#30D158</color>
+    <color name="accent_red">#FF453A</color>
+    <color name="accent_yellow">#FFD60A</color>
+    <color name="accent_blue">#0A84FF</color>
+    <color name="accent_orange">#FF9F0A</color>
 
     <!-- Text -->
-    <color name="text_primary">#F5F5F5</color>
-    <color name="text_secondary">#9CA3AF</color>
-    <color name="text_dim">#6B7280</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#8E8E93</color>
+    <color name="text_dim">#48484A</color>
     <color name="white">#FFFFFF</color>
 
-    <!-- Buttons -->
-    <color name="btn_surface">#2A2A2A</color>
-    <color name="btn_surface_light">#363636</color>
-    <color name="dpad_bg">#1E1E1E</color>
-    <color name="dpad_ring">#3A3A3A</color>
-    <color name="dpad_center_color">#6C63FF</color>
-    <color name="power_red">#EF4444</color>
-
-    <!-- Legacy compatibility -->
-    <color name="remote_bg">#0D0D0D</color>
-    <color name="gotv_primary">#6C63FF</color>
-    <color name="gotv_primary_dark">#4A44B2</color>
-    <color name="light_gray">#9CA3AF</color>
+    <!-- Compat -->
+    <color name="remote_bg">#121212</color>
+    <color name="gotv_primary">#FFFFFF</color>
+    <color name="gotv_primary_dark">#8E8E93</color>
+    <color name="light_gray">#8E8E93</color>
+    <color name="power_red">#FF453A</color>
+    <color name="btn_surface">#1C1C1E</color>
+    <color name="btn_surface_light">#2C2C2E</color>
+    <color name="dpad_bg">#1C1C1E</color>
+    <color name="dpad_ring">#3A3A3C</color>
+    <color name="dpad_center_color">#2C2C2E</color>
 </resources>

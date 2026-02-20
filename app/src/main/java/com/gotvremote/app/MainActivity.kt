@@ -183,8 +183,26 @@ class MainActivity : AppCompatActivity(), AndroidTvRemote.Listener {
             }
         }
 
-        mapButton(R.id.btnInput, "INPUT")
         mapButton(R.id.btnMute, "MUTE")
+        mapButton(R.id.btnInput, "INPUT")
+
+        // D-Pad
+        mapButton(R.id.btnUp, "UP")
+        mapButton(R.id.btnDown, "DOWN")
+        mapButton(R.id.btnLeft, "LEFT")
+        mapButton(R.id.btnRight, "RIGHT")
+        mapButton(R.id.btnOk, "OK")
+
+        // Nav row
+        mapButton(R.id.btnBack, "BACK")
+        mapButton(R.id.btnHome, "HOME")
+        mapButton(R.id.btnMenu, "MENU")
+
+        // Volume & Channel
+        mapButton(R.id.btnVolUp, "VOL_UP")
+        mapButton(R.id.btnVolDown, "VOL_DOWN")
+        mapButton(R.id.btnChUp, "CH_UP")
+        mapButton(R.id.btnChDown, "CH_DOWN")
 
         // Number pad
         mapButton(R.id.btn0, "0")
@@ -200,26 +218,8 @@ class MainActivity : AppCompatActivity(), AndroidTvRemote.Listener {
         mapButton(R.id.btnLast, "LAST")
         mapButton(R.id.btnGuide, "GUIDE")
 
-        // D-Pad
-        mapButton(R.id.btnUp, "UP")
-        mapButton(R.id.btnDown, "DOWN")
-        mapButton(R.id.btnLeft, "LEFT")
-        mapButton(R.id.btnRight, "RIGHT")
-        mapButton(R.id.btnOk, "OK")
-
-        // Volume & Channel
-        mapButton(R.id.btnVolUp, "VOL_UP")
-        mapButton(R.id.btnVolDown, "VOL_DOWN")
-        mapButton(R.id.btnChUp, "CH_UP")
-        mapButton(R.id.btnChDown, "CH_DOWN")
-
         // Function buttons
-        mapButton(R.id.btnMenu, "MENU")
-        mapButton(R.id.btnHome, "HOME")
-        mapButton(R.id.btnBack, "BACK")
         mapButton(R.id.btnInfo, "INFO")
-
-        // Extra functions
         mapButton(R.id.btnEpg, "EPG")
         mapButton(R.id.btnFav, "FAV")
         mapButton(R.id.btnSubtitle, "SUBTITLE")
